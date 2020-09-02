@@ -1,0 +1,12 @@
+
+.vs/pint-size-packer/v15/.suo
+*.db
+*.opendb
+*.ipch
+*.obj
+*.log
+*.tlog
+*.pdb
+*.exe
+*.iobj
+*.ipdb
