@@ -186,6 +186,15 @@ public:
         return reinterpret_cast< char* >( data ) + section_hdr( name )->PointerToRawData;
     }
 
+    template< class T >
+    T align_up( T addr, size_t alignment )
+    {
+        size_t pad = (uintptr_t)addr % alignment;
+        if ( pad ) {
+            return (uintptr_t)addr + alignment - pad;
+        }
+        return addr;
+    }
 
 
     size_t rva2fo( size_t rva )
@@ -215,6 +224,8 @@ public:
         return 0;
     }
 
+
+
     bool save( const char* fname )
     {
         std::ofstream ofile( fname, std::fstream::binary );
@@ -223,20 +234,50 @@ public:
             return false;
         }
 
-        ofile.write( reinterpret_cast< char* >( data ), optional_hdr()->SizeOfHeaders );
-        
-        auto pad = optional_hdr()->SizeOfHeaders % optional_hdr()->FileAlignment;
-        while ( pad-- ) {
-            ofile.write( "\x00", 1 );
+        size_t hdrs_size = reinterpret_cast< uintptr_t >( section_hdr( 0U ) ) - reinterpret_cast< uintptr_t >( pe_hdr() );
+        ofile.write( reinterpret_cast< char* >( pe_hdr() ), hdrs_size );
+
+        if ( (DWORD)ofile.tellp() + sections.size() * sizeof( sections[0]->hdr ) > section_hdr( 0U )->PointerToRawData ) {
+            for ( auto sec : sections ) {
+                sec->hdr.PointerToRawData += optional_hdr()->FileAlignment;
+            }
         }
 
-        for ( auto sec : sections ) {
-            ofile.write( reinterpret_cast< char* >( sec->data ), sec->hdr.SizeOfRawData );
+        for ( auto section : sections ) {
+            ofile.write( reinterpret_cast< char* >( &section->hdr ), sizeof( section->hdr ) );
+        }
+
+        auto pad = ofile.tellp() % optional_hdr()->FileAlignment;
+        if ( pad ) {
+            pad = optional_hdr()->FileAlignment - pad;
+            while ( pad-- ) {
+                ofile.write( "\x00", 1 );
+            }
+        }
+
+        for ( auto section : sections ) {
+            ofile.write( reinterpret_cast< char* >( section->data ), section->hdr.SizeOfRawData );
         }
 
         return true;
     }
 
+
+
+    bool section_add( PIMAGE_SECTION_HEADER shdr, void* sdata )
+    {
+        PIMAGE_SECTION_HEADER lastsechdr = section_hdr( file_hdr()->NumberOfSections - 1 );
+
+        shdr->VirtualAddress = (DWORD)align_up< size_t >( lastsechdr->VirtualAddress + lastsechdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
+        shdr->PointerToRawData = lastsechdr->PointerToRawData + lastsechdr->SizeOfRawData;
+
+        sections.push_back( new Section( shdr, sdata, shdr->SizeOfRawData ) );
+
+        file_hdr()->NumberOfSections++;
+        optional_hdr()->SizeOfImage += (DWORD)align_up< size_t >( shdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
+
+        return true;
+    }
 
 };
 
