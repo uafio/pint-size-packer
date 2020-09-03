@@ -24,7 +24,7 @@
  *
  **************************************************************************/
 
-
+// clang-format off
 
 #include <Windows.h>
 
@@ -6963,22 +6963,15 @@ mz_bool mz_zip_end(mz_zip_archive *pZip)
 }
 
 
-//
-// Move the uncompress to .stub section
-//
-#pragma code_seg( push, ".stub" )
-
-
-mz_ulong mz_deflateBound( mz_streamp pStream, mz_ulong source_len )
+int mz_inflateEnd( mz_streamp pStream )
 {
-    (void)pStream;
-    /* This is really over conservative. (And lame, but it's actually pretty tricky to compute a true upper bound given the way tdefl's blocking works.) */
-    return MZ_MAX( 128 + ( source_len * 110 ) / 100, 128 + source_len + ( ( source_len / ( 31 * 1024 ) ) + 1 ) * 5 );
-}
-
-mz_ulong mz_compressBound( mz_ulong source_len )
-{
-    return mz_deflateBound( NULL, source_len );
+    if ( !pStream )
+        return MZ_STREAM_ERROR;
+    if ( pStream->state ) {
+        pStream->zfree( pStream->opaque, pStream->state );
+        pStream->state = NULL;
+    }
+    return MZ_OK;
 }
 
 
@@ -6999,49 +6992,60 @@ void* miniz_def_realloc_func( void* opaque, void* address, size_t items, size_t 
 }
 
 
-int mz_inflateInit2( mz_streamp pStream, int window_bits )
+int mz_inflateInit( mz_streamp pStream )
 {
-    inflate_state* pDecomp;
-    if ( !pStream )
-        return MZ_STREAM_ERROR;
-    if ( ( window_bits != MZ_DEFAULT_WINDOW_BITS ) && ( -window_bits != MZ_DEFAULT_WINDOW_BITS ) )
-        return MZ_PARAM_ERROR;
-
-    pStream->data_type = 0;
-    pStream->adler = 0;
-    pStream->msg = NULL;
-    pStream->total_in = 0;
-    pStream->total_out = 0;
-    pStream->reserved = 0;
-    if ( !pStream->zalloc )
-        pStream->zalloc = miniz_def_alloc_func;
-    if ( !pStream->zfree )
-        pStream->zfree = miniz_def_free_func;
-
-    pDecomp = (inflate_state*)pStream->zalloc( pStream->opaque, 1, sizeof( inflate_state ) );
-    if ( !pDecomp )
-        return MZ_MEM_ERROR;
-
-    pStream->state = (struct mz_internal_state*)pDecomp;
-
-    tinfl_init( &pDecomp->m_decomp );
-    pDecomp->m_dict_ofs = 0;
-    pDecomp->m_dict_avail = 0;
-    pDecomp->m_last_status = TINFL_STATUS_NEEDS_MORE_INPUT;
-    pDecomp->m_first_call = 1;
-    pDecomp->m_has_flushed = 0;
-    pDecomp->m_window_bits = window_bits;
-
     return MZ_OK;
 }
 
-int mz_inflateInit( mz_streamp pStream )
+
+//
+// Move the uncompress to .stub section
+//
+#pragma code_seg( push, ".stub" )
+#ifndef STUB_DATA
+#define STUB_DATA __declspec( allocate( ".stub" ) )
+#endif
+
+STUB_DATA char _554[] = "\05\05\04";
+STUB_DATA char _237[] = "\02\03\07";
+STUB_DATA char _3313[] = "\03\03\013";
+
+#pragma check_stack( off )
+__declspec(safebuffers) mz_ulong mz_deflateBound( mz_streamp pStream, mz_ulong source_len )
 {
-    return mz_inflateInit2( pStream, MZ_DEFAULT_WINDOW_BITS );
+    (void)pStream;
+    /* This is really over conservative. (And lame, but it's actually pretty tricky to compute a true upper bound given the way tdefl's blocking works.) */
+    return MZ_MAX( 128 + ( source_len * 110 ) / 100, 128 + source_len + ( ( source_len / ( 31 * 1024 ) ) + 1 ) * 5 );
 }
 
+#pragma check_stack( off )
+__declspec(safebuffers) mz_ulong mz_compressBound( mz_ulong source_len )
+{
+    return mz_deflateBound( NULL, source_len );
+}
 
-tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_next, size_t* pIn_buf_size, mz_uint8* pOut_buf_start, mz_uint8* pOut_buf_next, size_t* pOut_buf_size, const mz_uint32 decomp_flags )
+#pragma check_stack( off )
+__declspec(safebuffers) static __forceinline void* miniz_memcpy( void* dst, const void* src, size_t n )
+{
+    unsigned char* d = (unsigned char*)dst;
+    unsigned char* s = (unsigned char*)src;
+    while ( n-- ) {
+        *d++ = *s++;
+    }
+    return dst;
+}
+
+#pragma check_stack( off )
+__declspec(safebuffers) static __forceinline void miniz_memset( void* dst, int c, size_t size )
+{
+    unsigned char* d = (unsigned char*)dst;
+    while ( size-- ) {
+        *d++ = (unsigned char)c;
+    }
+}
+
+#pragma check_stack( off )
+__declspec(safebuffers) tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_next, size_t* pIn_buf_size, mz_uint8* pOut_buf_start, mz_uint8* pOut_buf_next, size_t* pOut_buf_size, const mz_uint32 decomp_flags )
 {
     static const int s_length_base[31] = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0 };
     static const int s_length_extra[31] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0 };
@@ -7115,7 +7119,7 @@ tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_ne
                     TINFL_CR_RETURN( 38, ( decomp_flags & TINFL_FLAG_HAS_MORE_INPUT ) ? TINFL_STATUS_NEEDS_MORE_INPUT : TINFL_STATUS_FAILED_CANNOT_MAKE_PROGRESS );
                 }
                 n = MZ_MIN( MZ_MIN( ( size_t )( pOut_buf_end - pOut_buf_cur ), ( size_t )( pIn_buf_end - pIn_buf_cur ) ), counter );
-                TINFL_MEMCPY( pOut_buf_cur, pIn_buf_cur, n ); // TODO: get rid of memcpy
+                miniz_memcpy( pOut_buf_cur, pIn_buf_cur, n );
                 pIn_buf_cur += n;
                 pOut_buf_cur += n;
                 counter -= (mz_uint)n;
@@ -7128,7 +7132,7 @@ tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_ne
                 mz_uint i;
                 r->m_table_sizes[0] = 288;
                 r->m_table_sizes[1] = 32;
-                TINFL_MEMSET( r->m_tables[1].m_code_size, 5, 32 ); // TODO: get rid of memset
+                miniz_memset( r->m_tables[1].m_code_size, 5, 32 );
                 for ( i = 0; i <= 143; ++i )
                     *p++ = 8;
                 for ( ; i <= 255; ++i )
@@ -7139,10 +7143,10 @@ tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_ne
                     *p++ = 8;
             } else {
                 for ( counter = 0; counter < 3; counter++ ) {
-                    TINFL_GET_BITS( 11, r->m_table_sizes[counter], "\05\05\04"[counter] );
+                    TINFL_GET_BITS( 11, r->m_table_sizes[counter], _554[counter] );
                     r->m_table_sizes[counter] += s_min_table_sizes[counter];
                 }
-                MZ_CLEAR_OBJ( r->m_tables[2].m_code_size );
+                miniz_memset( r->m_tables[2].m_code_size, 0, sizeof( r->m_tables[2].m_code_size ) );
                 for ( counter = 0; counter < r->m_table_sizes[2]; counter++ ) {
                     mz_uint s;
                     TINFL_GET_BITS( 14, s, 3 );
@@ -7155,9 +7159,9 @@ tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_ne
                 tinfl_huff_table* pTable;
                 mz_uint i, j, used_syms, total, sym_index, next_code[17], total_syms[16];
                 pTable = &r->m_tables[r->m_type];
-                MZ_CLEAR_OBJ( total_syms );
-                MZ_CLEAR_OBJ( pTable->m_look_up );
-                MZ_CLEAR_OBJ( pTable->m_tree );
+                miniz_memset( total_syms, 0, sizeof( total_syms ) );
+                miniz_memset( pTable->m_look_up, 0, sizeof( pTable->m_look_up ) );
+                miniz_memset( pTable->m_tree, 0, sizeof( pTable->m_tree ) );
                 for ( i = 0; i < r->m_table_sizes[r->m_type]; ++i )
                     total_syms[pTable->m_code_size[i]]++;
                 used_syms = 0, total = 0;
@@ -7213,17 +7217,17 @@ tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_ne
                         if ( ( dist == 16 ) && ( !counter ) ) {
                             TINFL_CR_RETURN_FOREVER( 17, TINFL_STATUS_FAILED );
                         }
-                        num_extra = "\02\03\07"[dist - 16];
+                        num_extra = _237[dist - 16];
                         TINFL_GET_BITS( 18, s, num_extra );
-                        s += "\03\03\013"[dist - 16];
-                        TINFL_MEMSET( r->m_len_codes + counter, ( dist == 16 ) ? r->m_len_codes[counter - 1] : 0, s ); // TODO: get rid of memset
+                        s += _3313[dist - 16];
+                        miniz_memset( r->m_len_codes + counter, ( dist == 16 ) ? r->m_len_codes[counter - 1] : 0, s );
                         counter += s;
                     }
                     if ( ( r->m_table_sizes[0] + r->m_table_sizes[1] ) != counter ) {
                         TINFL_CR_RETURN_FOREVER( 21, TINFL_STATUS_FAILED );
                     }
-                    TINFL_MEMCPY( r->m_tables[0].m_code_size, r->m_len_codes, r->m_table_sizes[0] ); // TODO: get rid of memcpy
-                    TINFL_MEMCPY( r->m_tables[1].m_code_size, r->m_len_codes + r->m_table_sizes[0], r->m_table_sizes[1] ); // TODO: get rid of memcpy
+                    miniz_memcpy( r->m_tables[0].m_code_size, r->m_len_codes, r->m_table_sizes[0] );
+                    miniz_memcpy( r->m_tables[1].m_code_size, r->m_len_codes + r->m_table_sizes[0], r->m_table_sizes[1] );
                 }
             }
             for ( ;; ) {
@@ -7336,7 +7340,7 @@ tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_ne
                     const mz_uint8* pSrc_end = pSrc + ( counter & ~7 );
                     do {
 #ifdef MINIZ_UNALIGNED_USE_MEMCPY
-                        memcpy( pOut_buf_cur, pSrc, sizeof( mz_uint32 ) * 2 );
+                        miniz_memcpy( pOut_buf_cur, pSrc, sizeof( mz_uint32 ) * 2 );
 #else
                         ( (mz_uint32*)pOut_buf_cur )[0] = ( (const mz_uint32*)pSrc )[0];
                         ( (mz_uint32*)pOut_buf_cur )[1] = ( (const mz_uint32*)pSrc )[1];
@@ -7443,8 +7447,8 @@ common_exit:
     return status;
 }
 
-
-int mz_inflate( mz_streamp pStream, int flush )
+#pragma check_stack( off )
+__declspec(safebuffers) int mz_inflate( mz_streamp pStream, int flush )
 {
     inflate_state* pState;
     mz_uint n, first_call, decomp_flags = TINFL_FLAG_COMPUTE_ADLER32;
@@ -7501,7 +7505,7 @@ int mz_inflate( mz_streamp pStream, int flush )
 
     if ( pState->m_dict_avail ) {
         n = MZ_MIN( pState->m_dict_avail, pStream->avail_out );
-        memcpy( pStream->next_out, pState->m_dict + pState->m_dict_ofs, n );
+        miniz_memcpy( pStream->next_out, pState->m_dict + pState->m_dict_ofs, n );
         pStream->next_out += n;
         pStream->avail_out -= n;
         pStream->total_out += n;
@@ -7525,7 +7529,7 @@ int mz_inflate( mz_streamp pStream, int flush )
         pState->m_dict_avail = (mz_uint)out_bytes;
 
         n = MZ_MIN( pState->m_dict_avail, pStream->avail_out );
-        memcpy( pStream->next_out, pState->m_dict + pState->m_dict_ofs, n ); // TOOD: get rid of memcpy
+        miniz_memcpy( pStream->next_out, pState->m_dict + pState->m_dict_ofs, n ); // TOOD: get rid of memcpy
         pStream->next_out += n;
         pStream->avail_out -= n;
         pStream->total_out += n;
@@ -7551,24 +7555,20 @@ int mz_inflate( mz_streamp pStream, int flush )
 }
 
 
-int mz_inflateEnd( mz_streamp pStream )
+#pragma check_stack( off )
+__declspec(safebuffers) int mz_uncompress( unsigned char* pDest, mz_ulong* pDest_len, const unsigned char* pSource, mz_ulong source_len )
 {
-    if ( !pStream )
-        return MZ_STREAM_ERROR;
-    if ( pStream->state ) {
-        pStream->zfree( pStream->opaque, pStream->state );
-        pStream->state = NULL;
-    }
-    return MZ_OK;
-}
-
-
-int mz_uncompress( unsigned char* pDest, mz_ulong* pDest_len, const unsigned char* pSource, mz_ulong source_len )
-{
-    mz_stream stream;
     int status;
-    //memset( &stream, 0, sizeof( stream ) );
+    mz_stream stream;
     SecureZeroMemory( &stream, sizeof( stream ) );
+    inflate_state decomp;
+    SecureZeroMemory( &decomp, sizeof( decomp ) );
+
+    stream.state = (struct mz_internal_state*)&decomp;
+
+    decomp.m_last_status = TINFL_STATUS_NEEDS_MORE_INPUT;
+    decomp.m_first_call = 1;
+    decomp.m_window_bits = MZ_DEFAULT_WINDOW_BITS;
 
     /* In case mz_ulong is 64-bits (argh I hate longs). */
     if ( ( source_len | *pDest_len ) > 0xFFFFFFFFU )
@@ -7579,18 +7579,13 @@ int mz_uncompress( unsigned char* pDest, mz_ulong* pDest_len, const unsigned cha
     stream.next_out = pDest;
     stream.avail_out = (mz_uint32)*pDest_len;
 
-    status = mz_inflateInit( &stream );
-    if ( status != MZ_OK )
-        return status;
-
     status = mz_inflate( &stream, MZ_FINISH );
     if ( status != MZ_STREAM_END ) {
-        mz_inflateEnd( &stream );
         return ( ( status == MZ_BUF_ERROR ) && ( !stream.avail_in ) ) ? MZ_DATA_ERROR : status;
     }
     *pDest_len = stream.total_out;
 
-    return mz_inflateEnd( &stream );
+    return MZ_OK;
 }
 
 #pragma code_seg( pop )
