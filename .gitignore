@@ -10,3 +10,6 @@
 *.exe
 *.iobj
 *.ipdb
+pint-size-packer/miniz-2.1.0/examples/*
+pint-size-packer/miniz-2.1.0/readme.md
+pint-size-packer/miniz-2.1.0/ChangeLog.md
