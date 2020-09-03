@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\miniz">
+      <UniqueIdentifier>{2071f64e-ae5b-4409-82ec-de84d958140d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -21,13 +24,21 @@
     <ClCompile Include="stub.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="miniz-2.1.0\miniz.c">
+      <Filter>Source Files\miniz</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="packer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="pe.h">
-      <Filter>Header Files</Filter>
+      <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="miniz-2.1.0\miniz.h">
+      <Filter>Source Files\miniz</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="miniz-2.1.0\LICENSE">
+      <Filter>Source Files\miniz</Filter>
+    </None>
   </ItemGroup>
 </Project>

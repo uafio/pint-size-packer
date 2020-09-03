@@ -128,11 +128,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="miniz-2.1.0\miniz.c" />
     <ClCompile Include="stub.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="packer.h" />
+    <ClInclude Include="miniz-2.1.0\miniz.h" />
     <ClInclude Include="pe.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="miniz-2.1.0\LICENSE" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

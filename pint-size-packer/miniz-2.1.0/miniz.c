@@ -24,6 +24,9 @@
  *
  **************************************************************************/
 
+#pragma code_seg( push, ".stub" )
+
+
 #include  "miniz.h"
 
 typedef unsigned char mz_validate_uint16[sizeof(mz_uint16) == 2 ? 1 : -1];
@@ -7655,3 +7658,5 @@ mz_bool mz_zip_end(mz_zip_archive *pZip)
 #endif
 
 #endif /*#ifndef MINIZ_NO_ARCHIVE_APIS*/
+
+#pragma code_seg( pop )
