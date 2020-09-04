@@ -107,6 +107,11 @@ public:
         sections.clear();
     }
 
+    std::vector< Section* >& get_sections( void )
+    {
+        return sections;
+    }
+
     PIMAGE_DOS_HEADER pe_hdr( void )
     {
         return reinterpret_cast< PIMAGE_DOS_HEADER >( data );
@@ -229,7 +234,7 @@ public:
 
     bool section_add( PIMAGE_SECTION_HEADER shdr, void* sdata )
     {
-        PIMAGE_SECTION_HEADER lastsechdr = section_hdr( file_hdr()->NumberOfSections - 1 );
+        PIMAGE_SECTION_HEADER lastsechdr = &sections.back()->hdr;
 
         shdr->VirtualAddress = (DWORD)align_up< size_t >( lastsechdr->VirtualAddress + lastsechdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
         shdr->PointerToRawData = lastsechdr->PointerToRawData + lastsechdr->SizeOfRawData;
@@ -320,3 +325,5 @@ public:
     }
 
 };
+
+

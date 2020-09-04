@@ -139,6 +139,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="miniz-2.1.0\miniz.h" />
+    <ClInclude Include="packer.h" />
     <ClInclude Include="pe.h" />
     <ClInclude Include="strings.h" />
   </ItemGroup>
