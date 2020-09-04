@@ -125,15 +125,19 @@
       <OptimizeReferences>true</OptimizeReferences>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
+    <PostBuildEvent>
+      <Command>editbin.exe /section:.stub,crwe $(TargetPath)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="miniz-2.1.0\miniz.c" />
+    <ClCompile Include="miniz-2.1.0\miniz.cpp" />
     <ClCompile Include="stub.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="miniz-2.1.0\miniz.h" />
     <ClInclude Include="pe.h" />
+    <ClInclude Include="strings.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="miniz-2.1.0\LICENSE" />

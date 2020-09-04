@@ -28,11 +28,18 @@
 
 #include <Windows.h>
 
+typedef NTSTATUS( NTAPI* NtAllocateVirtualMemory_t )( HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect );
+typedef NTSTATUS( NTAPI* NtFreeVirtualMemory_t )( HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG FreeType );
+
+extern NtFreeVirtualMemory_t pNtFreeVirtualMemory;
+extern NtAllocateVirtualMemory_t pNtAllocateVirtualMemory;
+
 #include  "miniz.h"
 
 typedef unsigned char mz_validate_uint16[sizeof(mz_uint16) == 2 ? 1 : -1];
 typedef unsigned char mz_validate_uint32[sizeof(mz_uint32) == 4 ? 1 : -1];
 typedef unsigned char mz_validate_uint64[sizeof(mz_uint64) == 8 ? 1 : -1];
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -7045,6 +7052,8 @@ __declspec(safebuffers) static __forceinline void miniz_memset( void* dst, int c
     }
 }
 
+#pragma warning( push )
+#pragma warning( disable: 4334 )
 #pragma check_stack( off )
 __declspec(safebuffers) tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_next, size_t* pIn_buf_size, mz_uint8* pOut_buf_start, mz_uint8* pOut_buf_next, size_t* pOut_buf_size, const mz_uint32 decomp_flags )
 {
@@ -7442,6 +7451,8 @@ common_exit:
     return status;
 }
 
+#pragma warning( pop )
+
 #pragma check_stack( off )
 __declspec(safebuffers) __forceinline int mz_inflate( mz_streamp pStream, int flush )
 {
@@ -7533,21 +7544,21 @@ __declspec(safebuffers) __forceinline int mz_inflate( mz_streamp pStream, int fl
     return ( ( status == TINFL_STATUS_DONE ) && ( !pState->m_dict_avail ) ) ? MZ_STREAM_END : MZ_OK;
 }
 
-
 #pragma check_stack( off )
-#pragma strict_gs_check( push, on )
 __declspec(safebuffers) int mz_uncompress( unsigned char* pDest, mz_ulong* pDest_len, const unsigned char* pSource, mz_ulong source_len )
 {
     mz_stream stream;
     SecureZeroMemory( &stream, sizeof( stream ) );
-    inflate_state decomp;
-    SecureZeroMemory( &decomp, sizeof( decomp ) );
+    inflate_state* pDecomp = NULL;
+    size_t decomp_size = sizeof( *pDecomp );
 
-    stream.state = (struct mz_internal_state*)&decomp;
+    pNtAllocateVirtualMemory( (HANDLE)-1, (void**)&pDecomp, 0, &decomp_size, MEM_COMMIT, PAGE_READWRITE );
 
-    decomp.m_last_status = TINFL_STATUS_NEEDS_MORE_INPUT;
-    decomp.m_first_call = 1;
-    decomp.m_window_bits = MZ_DEFAULT_WINDOW_BITS;
+    stream.state = (struct mz_internal_state*)pDecomp;
+
+    pDecomp->m_last_status = TINFL_STATUS_NEEDS_MORE_INPUT;
+    pDecomp->m_first_call = 1;
+    pDecomp->m_window_bits = MZ_DEFAULT_WINDOW_BITS;
 
     stream.next_in = pSource;
     stream.avail_in = (mz_uint32)source_len;
@@ -7557,9 +7568,13 @@ __declspec(safebuffers) int mz_uncompress( unsigned char* pDest, mz_ulong* pDest
     mz_inflate( &stream, MZ_FINISH );
     *pDest_len = stream.total_out;
 
+    size_t size = 0;
+    pNtFreeVirtualMemory( (HANDLE)-1, (void**)&pDecomp, &size, MEM_RELEASE );
+
     return MZ_OK;
 }
-#pragma strict_gs_check( pop )
+
+
 #pragma code_seg( pop )
 
 
