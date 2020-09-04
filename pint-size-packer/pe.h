@@ -215,15 +215,13 @@ public:
         if ( size_of_headers() > optional_hdr()->SizeOfHeaders ) {
         
             optional_hdr()->SizeOfHeaders = (DWORD)size_of_headers();
-
-            for ( auto section : sections ) {
-                section->hdr.PointerToRawData += optional_hdr()->FileAlignment;
-            }
         
         }
 
         return true;
     }
+
+
 
     size_t size_of_headers( void )
     {
@@ -236,6 +234,8 @@ public:
         return align_up< size_t >( result, optional_hdr()->FileAlignment );
     }
 
+
+
     bool save( const char* fname )
     {
         std::ofstream ofile( fname, std::fstream::binary );
@@ -247,8 +247,18 @@ public:
         ofile.write( reinterpret_cast< char* >( pe_hdr() ), pe_hdr()->e_lfanew );
         ofile.write( reinterpret_cast< char* >( nt_hdr() ), sizeof( IMAGE_NT_HEADERS64 ) );
 
+        DWORD raw = (DWORD)size_of_headers();
+        DWORD rva = (DWORD)align_up< size_t >( raw, optional_hdr()->SectionAlignment );
+
         for ( auto section : sections ) {
         
+            PIMAGE_SECTION_HEADER shdr = &section->hdr;
+            shdr->VirtualAddress = rva;
+            shdr->PointerToRawData = raw;
+
+            rva = (DWORD)align_up< size_t >( rva + shdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
+            raw = (DWORD)align_up< size_t >( raw + shdr->SizeOfRawData, optional_hdr()->FileAlignment );
+
             ofile.write( reinterpret_cast< char* >( &section->hdr ), sizeof( IMAGE_SECTION_HEADER ) );
             
         }
@@ -274,13 +284,13 @@ private:
     void* base;
 
 public:
-    PEHeader( void* addr )
+    __forceinline PEHeader( void* addr )
         : base( addr )
     {
     }
 
 
-    void* rva2va( size_t rva )
+    __forceinline void* rva2va( size_t rva )
     {
         return reinterpret_cast< char* >( base ) + rva;
     }
@@ -340,6 +350,17 @@ public:
 
         }
         return nullptr;    
+    }
+
+
+    template< class T >
+    __forceinline T align_up( T addr, size_t alignment )
+    {
+        size_t pad = (uintptr_t)addr % alignment;
+        if ( pad ) {
+            return (uintptr_t)addr + alignment - pad;
+        }
+        return addr;
     }
 
 };
