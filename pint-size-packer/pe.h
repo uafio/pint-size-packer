@@ -3,12 +3,11 @@
 #include <stdio.h>
 #include <vector>
 #include <fstream>
-
+#include "strings.h"
 
 class Section
 {
 private:
-
 public:
     IMAGE_SECTION_HEADER hdr;
     void* data;
@@ -29,7 +28,6 @@ public:
         memset( &hdr, 0, sizeof( hdr ) );
     }
 };
-
 
 class PEFile
 {
@@ -53,7 +51,7 @@ private:
 
         file.seekg( std::fstream::beg );
         file.read( reinterpret_cast< char* >( data ), size );
-        
+
         return true;
     }
 
@@ -73,21 +71,17 @@ public:
         this->fpath = reinterpret_cast< const char* >( calloc( _MAX_PATH, 1 ) );
         strcpy_s( const_cast< char* >( this->fpath ), _MAX_PATH, fpath );
         fname = strrchr( this->fpath, separator() );
-        
+
         if ( fname == nullptr ) {
             fname = fpath;
         }
-        
-        if ( get_file_content( fpath ) ) {
-            
-            for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
 
+        if ( get_file_content( fpath ) ) {
+            for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
                 auto shdr = section_hdr( i );
                 auto sdata = section( i );
                 sections.push_back( new Section( shdr, sdata, shdr->SizeOfRawData ) );
-
             }
-        
         }
     }
 
@@ -113,73 +107,52 @@ public:
         sections.clear();
     }
 
-
-
     PIMAGE_DOS_HEADER pe_hdr( void )
     {
         return reinterpret_cast< PIMAGE_DOS_HEADER >( data );
     }
-
-
 
     PIMAGE_NT_HEADERS64 nt_hdr( void )
     {
         return reinterpret_cast< PIMAGE_NT_HEADERS64 >( reinterpret_cast< uintptr_t >( data ) + pe_hdr()->e_lfanew );
     }
 
-
-
     PIMAGE_FILE_HEADER file_hdr( void )
     {
         return &nt_hdr()->FileHeader;
     }
-
-
 
     PIMAGE_OPTIONAL_HEADER64 optional_hdr( void )
     {
         return &nt_hdr()->OptionalHeader;
     }
 
-
-
     PIMAGE_DATA_DIRECTORY data_dir( size_t index )
     {
         return &optional_hdr()->DataDirectory[index];
     }
-
-
 
     PIMAGE_SECTION_HEADER section_hdr( uint32_t index )
     {
         return IMAGE_FIRST_SECTION( nt_hdr() ) + index;
     }
 
-
-
     PIMAGE_SECTION_HEADER section_hdr( const char* name )
     {
         for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
-
             auto section = section_hdr( i );
 
             if ( strncmp( name, reinterpret_cast< char* >( section->Name ), sizeof( section->Name ) ) == 0 ) {
-
                 return section;
-
             }
         }
         return nullptr;
     }
 
-
-
     void* section( uint32_t index )
     {
         return reinterpret_cast< char* >( data ) + section_hdr( index )->PointerToRawData;
     }
-
-
 
     void* section( const char* name )
     {
@@ -196,7 +169,6 @@ public:
         return addr;
     }
 
-
     size_t rva2fo( size_t rva )
     {
         if ( rva <= section_hdr( 0U )->PointerToRawData ) {
@@ -204,27 +176,20 @@ public:
         }
 
         for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
-            
             auto section = section_hdr( i );
 
             if ( rva >= section->VirtualAddress && rva < section->VirtualAddress + section->Misc.VirtualSize ) {
-
                 rva -= section->VirtualAddress;
 
                 if ( rva >= section->SizeOfRawData ) {
-
                     return section->PointerToRawData;
-
                 }
                 return rva + section->PointerToRawData;
             }
-
         }
 
         return 0;
     }
-
-
 
     bool save( const char* fname )
     {
@@ -262,8 +227,6 @@ public:
         return true;
     }
 
-
-
     bool section_add( PIMAGE_SECTION_HEADER shdr, void* sdata )
     {
         PIMAGE_SECTION_HEADER lastsechdr = section_hdr( file_hdr()->NumberOfSections - 1 );
@@ -278,6 +241,82 @@ public:
 
         return true;
     }
-
 };
 
+
+
+class PEHeader
+{
+private:
+    void* base;
+
+public:
+    PEHeader( void* addr )
+        : base( addr )
+    {
+    }
+
+
+    void* rva2va( size_t rva )
+    {
+        return reinterpret_cast< char* >( base ) + rva;
+    }
+
+
+    __forceinline PIMAGE_DOS_HEADER pe_hdr( void )
+    {
+        return reinterpret_cast< PIMAGE_DOS_HEADER >( base );
+    }
+
+
+
+    __forceinline PIMAGE_NT_HEADERS64 nt_hdr( void )
+    {
+        return reinterpret_cast< PIMAGE_NT_HEADERS64 >( reinterpret_cast< uintptr_t >( base ) + pe_hdr()->e_lfanew );
+    }
+
+
+
+    __forceinline PIMAGE_FILE_HEADER file_hdr( void )
+    {
+        return &nt_hdr()->FileHeader;
+    }
+
+
+
+    __forceinline PIMAGE_OPTIONAL_HEADER64 optional_hdr( void )
+    {
+        return &nt_hdr()->OptionalHeader;
+    }
+
+
+
+    __forceinline PIMAGE_DATA_DIRECTORY data_dir( size_t index )
+    {
+        return &optional_hdr()->DataDirectory[index];
+    }
+
+
+
+    __forceinline PIMAGE_SECTION_HEADER section_hdr( uint32_t index )
+    {
+        return IMAGE_FIRST_SECTION( nt_hdr() ) + index;
+    }
+
+
+
+    __forceinline PIMAGE_SECTION_HEADER section_hdr( const char* sname )
+    {
+        for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
+
+            auto section = section_hdr( i );
+
+            if ( stub_strncmp( sname, reinterpret_cast< char* >( section->Name ), sizeof( section->Name ) ) == 0 ) {
+                return section;
+            }
+
+        }
+        return nullptr;    
+    }
+
+};
