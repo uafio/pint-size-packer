@@ -7001,6 +7001,7 @@ int mz_inflateInit( mz_streamp pStream )
 //
 // Move the uncompress to .stub section
 //
+#include <intrin.h>
 #pragma code_seg( push, ".stub" )
 #ifndef STUB_DATA
 #define STUB_DATA __declspec( allocate( ".stub" ) )
@@ -7011,7 +7012,7 @@ STUB_DATA char _237[] = "\02\03\07";
 STUB_DATA char _3313[] = "\03\03\013";
 
 #pragma check_stack( off )
-__declspec(safebuffers) mz_ulong mz_deflateBound( mz_streamp pStream, mz_ulong source_len )
+__declspec(safebuffers) __forceinline mz_ulong mz_deflateBound( mz_streamp pStream, mz_ulong source_len )
 {
     (void)pStream;
     /* This is really over conservative. (And lame, but it's actually pretty tricky to compute a true upper bound given the way tdefl's blocking works.) */
@@ -7047,12 +7048,12 @@ __declspec(safebuffers) static __forceinline void miniz_memset( void* dst, int c
 #pragma check_stack( off )
 __declspec(safebuffers) tinfl_status tinfl_decompress( tinfl_decompressor* r, const mz_uint8* pIn_buf_next, size_t* pIn_buf_size, mz_uint8* pOut_buf_start, mz_uint8* pOut_buf_next, size_t* pOut_buf_size, const mz_uint32 decomp_flags )
 {
-    static const int s_length_base[31] = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0 };
-    static const int s_length_extra[31] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0 };
-    static const int s_dist_base[32] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577, 0, 0 };
-    static const int s_dist_extra[32] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
-    static const mz_uint8 s_length_dezigzag[19] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
-    static const int s_min_table_sizes[3] = { 257, 1, 4 };
+    volatile int s_length_base[31] = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0 };
+    volatile int s_length_extra[31] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0 };
+    volatile int s_dist_base[32] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577, 0, 0 };
+    volatile int s_dist_extra[32] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
+    volatile mz_uint8 s_length_dezigzag[19] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
+    volatile int s_min_table_sizes[3] = { 257, 1, 4 };
 
     tinfl_status status = TINFL_STATUS_FAILED;
     mz_uint32 num_bits, dist, counter, num_extra;
@@ -7060,12 +7061,6 @@ __declspec(safebuffers) tinfl_status tinfl_decompress( tinfl_decompressor* r, co
     const mz_uint8 *pIn_buf_cur = pIn_buf_next, *const pIn_buf_end = pIn_buf_next + *pIn_buf_size;
     mz_uint8 *pOut_buf_cur = pOut_buf_next, *const pOut_buf_end = pOut_buf_next + *pOut_buf_size;
     size_t out_buf_size_mask = ( decomp_flags & TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF ) ? (size_t)-1 : ( ( pOut_buf_next - pOut_buf_start ) + *pOut_buf_size ) - 1, dist_from_out_buf_start;
-
-    /* Ensure the output buffer's size is a power of 2, unless the output buffer is large enough to hold the entire output file (in which case it doesn't matter). */
-    if ( ( ( out_buf_size_mask + 1 ) & out_buf_size_mask ) || ( pOut_buf_next < pOut_buf_start ) ) {
-        *pIn_buf_size = *pOut_buf_size = 0;
-        return TINFL_STATUS_BAD_PARAM;
-    }
 
     num_bits = r->m_num_bits;
     bit_buf = r->m_bit_buf;
@@ -7448,19 +7443,12 @@ common_exit:
 }
 
 #pragma check_stack( off )
-__declspec(safebuffers) int mz_inflate( mz_streamp pStream, int flush )
+__declspec(safebuffers) __forceinline int mz_inflate( mz_streamp pStream, int flush )
 {
     inflate_state* pState;
     mz_uint n, first_call, decomp_flags = TINFL_FLAG_COMPUTE_ADLER32;
     size_t in_bytes, out_bytes, orig_avail_in;
     tinfl_status status;
-
-    if ( ( !pStream ) || ( !pStream->state ) )
-        return MZ_STREAM_ERROR;
-    if ( flush == MZ_PARTIAL_FLUSH )
-        flush = MZ_SYNC_FLUSH;
-    if ( ( flush ) && ( flush != MZ_SYNC_FLUSH ) && ( flush != MZ_FINISH ) )
-        return MZ_STREAM_ERROR;
 
     pState = (inflate_state*)pStream->state;
     if ( pState->m_window_bits > 0 )
@@ -7469,11 +7457,7 @@ __declspec(safebuffers) int mz_inflate( mz_streamp pStream, int flush )
 
     first_call = pState->m_first_call;
     pState->m_first_call = 0;
-    if ( pState->m_last_status < 0 )
-        return MZ_DATA_ERROR;
 
-    if ( pState->m_has_flushed && ( flush != MZ_FINISH ) )
-        return MZ_STREAM_ERROR;
     pState->m_has_flushed |= ( flush == MZ_FINISH );
 
     if ( ( flush == MZ_FINISH ) && ( first_call ) ) {
@@ -7491,14 +7475,9 @@ __declspec(safebuffers) int mz_inflate( mz_streamp pStream, int flush )
         pStream->avail_out -= (mz_uint)out_bytes;
         pStream->total_out += (mz_uint)out_bytes;
 
-        if ( status < 0 )
-            return MZ_DATA_ERROR;
-        else if ( status != TINFL_STATUS_DONE ) {
-            pState->m_last_status = TINFL_STATUS_FAILED;
-            return MZ_BUF_ERROR;
-        }
         return MZ_STREAM_END;
     }
+
     /* flush != MZ_FINISH then we must assume there's more input. */
     if ( flush != MZ_FINISH )
         decomp_flags |= TINFL_FLAG_HAS_MORE_INPUT;
@@ -7529,7 +7508,7 @@ __declspec(safebuffers) int mz_inflate( mz_streamp pStream, int flush )
         pState->m_dict_avail = (mz_uint)out_bytes;
 
         n = MZ_MIN( pState->m_dict_avail, pStream->avail_out );
-        miniz_memcpy( pStream->next_out, pState->m_dict + pState->m_dict_ofs, n ); // TOOD: get rid of memcpy
+        miniz_memcpy( pStream->next_out, pState->m_dict + pState->m_dict_ofs, n );
         pStream->next_out += n;
         pStream->avail_out -= n;
         pStream->total_out += n;
@@ -7556,9 +7535,9 @@ __declspec(safebuffers) int mz_inflate( mz_streamp pStream, int flush )
 
 
 #pragma check_stack( off )
+#pragma strict_gs_check( push, on )
 __declspec(safebuffers) int mz_uncompress( unsigned char* pDest, mz_ulong* pDest_len, const unsigned char* pSource, mz_ulong source_len )
 {
-    int status;
     mz_stream stream;
     SecureZeroMemory( &stream, sizeof( stream ) );
     inflate_state decomp;
@@ -7570,24 +7549,17 @@ __declspec(safebuffers) int mz_uncompress( unsigned char* pDest, mz_ulong* pDest
     decomp.m_first_call = 1;
     decomp.m_window_bits = MZ_DEFAULT_WINDOW_BITS;
 
-    /* In case mz_ulong is 64-bits (argh I hate longs). */
-    if ( ( source_len | *pDest_len ) > 0xFFFFFFFFU )
-        return MZ_PARAM_ERROR;
-
     stream.next_in = pSource;
     stream.avail_in = (mz_uint32)source_len;
     stream.next_out = pDest;
     stream.avail_out = (mz_uint32)*pDest_len;
 
-    status = mz_inflate( &stream, MZ_FINISH );
-    if ( status != MZ_STREAM_END ) {
-        return ( ( status == MZ_BUF_ERROR ) && ( !stream.avail_in ) ) ? MZ_DATA_ERROR : status;
-    }
+    mz_inflate( &stream, MZ_FINISH );
     *pDest_len = stream.total_out;
 
     return MZ_OK;
 }
-
+#pragma strict_gs_check( pop )
 #pragma code_seg( pop )
 
 
