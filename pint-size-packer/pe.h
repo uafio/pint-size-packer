@@ -32,8 +32,6 @@ public:
 class PEFile
 {
 private:
-    const char* fpath;
-    const char* fname;
     void* data;
     size_t size;
     std::vector< Section* > sections;
@@ -64,18 +62,11 @@ private:
 #endif
     }
 
+
 public:
     PEFile( const char* fpath )
-        : fpath( nullptr ), fname( nullptr ), data( nullptr ), size( 0 )
+        : data( nullptr ), size( 0 )
     {
-        this->fpath = reinterpret_cast< const char* >( calloc( _MAX_PATH, 1 ) );
-        strcpy_s( const_cast< char* >( this->fpath ), _MAX_PATH, fpath );
-        fname = strrchr( this->fpath, separator() );
-
-        if ( fname == nullptr ) {
-            fname = fpath;
-        }
-
         if ( get_file_content( fpath ) ) {
             for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
                 auto shdr = section_hdr( i );
@@ -87,13 +78,6 @@ public:
 
     ~PEFile( void )
     {
-        fname = nullptr;
-
-        if ( fpath ) {
-            free( const_cast< char* >( fpath ) );
-            fpath = nullptr;
-        }
-
         if ( data ) {
             free( data );
             data = nullptr;
@@ -154,16 +138,6 @@ public:
         return nullptr;
     }
 
-    void* section( uint32_t index )
-    {
-        return reinterpret_cast< char* >( data ) + section_hdr( index )->PointerToRawData;
-    }
-
-    void* section( const char* name )
-    {
-        return reinterpret_cast< char* >( data ) + section_hdr( name )->PointerToRawData;
-    }
-
     template< class T >
     T align_up( T addr, size_t alignment )
     {
@@ -196,41 +170,34 @@ public:
         return 0;
     }
 
-    bool save( const char* fname )
+
+    void* section( uint32_t index )
     {
-        std::ofstream ofile( fname, std::fstream::binary );
-        if ( !ofile.is_open() ) {
-            std::perror( __FUNCTION__ );
-            return false;
+        if ( index < sections.size() ) {
+            return sections.at( index )->data;
         }
 
-        size_t hdrs_size = reinterpret_cast< uintptr_t >( section_hdr( 0U ) ) - reinterpret_cast< uintptr_t >( pe_hdr() );
-        ofile.write( reinterpret_cast< char* >( pe_hdr() ), hdrs_size );
-
-        if ( (DWORD)ofile.tellp() + sections.size() * sizeof( sections[0]->hdr ) > section_hdr( 0U )->PointerToRawData ) {
-            for ( auto sec : sections ) {
-                sec->hdr.PointerToRawData += optional_hdr()->FileAlignment;
-            }
-        }
-
-        for ( auto section : sections ) {
-            ofile.write( reinterpret_cast< char* >( &section->hdr ), sizeof( section->hdr ) );
-        }
-
-        auto pad = ofile.tellp() % optional_hdr()->FileAlignment;
-        if ( pad ) {
-            pad = optional_hdr()->FileAlignment - pad;
-            while ( pad-- ) {
-                ofile.write( "\x00", 1 );
-            }
-        }
-
-        for ( auto section : sections ) {
-            ofile.write( reinterpret_cast< char* >( section->data ), section->hdr.SizeOfRawData );
-        }
-
-        return true;
+        return reinterpret_cast< char* >( data ) + section_hdr( index )->PointerToRawData;
     }
+
+    void* section( const char* name )
+    {
+        if ( sections.size() ) {
+
+            for ( auto section : sections ) {
+            
+                if ( strncmp( name, reinterpret_cast< char* >( section->hdr.Name ), sizeof( section->hdr.Name ) ) == 0 ) {
+                    return section->data;
+                }
+            
+            }
+
+            return nullptr;
+            
+        }
+        return reinterpret_cast< char* >( data ) + section_hdr( name )->PointerToRawData;
+    }
+
 
     bool section_add( PIMAGE_SECTION_HEADER shdr, void* sdata )
     {
@@ -242,7 +209,58 @@ public:
         sections.push_back( new Section( shdr, sdata, shdr->SizeOfRawData ) );
 
         file_hdr()->NumberOfSections++;
+
         optional_hdr()->SizeOfImage += (DWORD)align_up< size_t >( shdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
+
+        if ( size_of_headers() > optional_hdr()->SizeOfHeaders ) {
+        
+            optional_hdr()->SizeOfHeaders = (DWORD)size_of_headers();
+
+            for ( auto section : sections ) {
+                section->hdr.PointerToRawData += optional_hdr()->FileAlignment;
+            }
+        
+        }
+
+        return true;
+    }
+
+    size_t size_of_headers( void )
+    {
+        size_t result = 0;
+
+        result += pe_hdr()->e_lfanew;
+        result += sizeof( IMAGE_NT_HEADERS64 );
+        result += sizeof( IMAGE_SECTION_HEADER ) * sections.size();
+
+        return align_up< size_t >( result, optional_hdr()->FileAlignment );
+    }
+
+    bool save( const char* fname )
+    {
+        std::ofstream ofile( fname, std::fstream::binary );
+        if ( !ofile.is_open() ) {
+            std::perror( __FUNCTION__ );
+            return false;
+        }
+
+        ofile.write( reinterpret_cast< char* >( pe_hdr() ), pe_hdr()->e_lfanew );
+        ofile.write( reinterpret_cast< char* >( nt_hdr() ), sizeof( IMAGE_NT_HEADERS64 ) );
+
+        for ( auto section : sections ) {
+        
+            ofile.write( reinterpret_cast< char* >( &section->hdr ), sizeof( IMAGE_SECTION_HEADER ) );
+            
+        }
+
+        size_t pad = optional_hdr()->SizeOfHeaders - ofile.tellp();
+        while ( pad-- ) {
+            ofile.write( "\x00", 1 );
+        }
+
+        for ( auto section : sections ) {
+            ofile.write( reinterpret_cast< char* >( section->data ), section->hdr.SizeOfRawData );
+        }
 
         return true;
     }
