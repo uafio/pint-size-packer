@@ -1,4 +1,5 @@
 #pragma once
+#include <Windows.h>
 
 
 __forceinline size_t stub_strlen( const char* s )
@@ -9,6 +10,8 @@ __forceinline size_t stub_strlen( const char* s )
     return d - s;
 }
 
+
+
 __forceinline size_t stub_strlen( const wchar_t* s )
 {
     const wchar_t* d = s;
@@ -16,6 +19,7 @@ __forceinline size_t stub_strlen( const wchar_t* s )
         ;
     return ( ( d - s ) >> 1 );
 }
+
 
 
 __forceinline char* stub_strchr( const char* s, int c )
@@ -28,6 +32,7 @@ __forceinline char* stub_strchr( const char* s, int c )
 
     return nullptr;
 }
+
 
 
 __forceinline wchar_t* stub_strchr( const wchar_t* s, int c )
@@ -81,7 +86,9 @@ __forceinline wchar_t* stub_strrchr( const wchar_t* s, int c )
     return (wchar_t*)found;
 }
 
-__forceinline char tolower( char c )
+
+
+__forceinline char stub_tolower( char c )
 {
     if ( c >= 'A' && c <= 'Z' ) {
         return c + 0x20;
@@ -90,7 +97,9 @@ __forceinline char tolower( char c )
     return c;
 }
 
-__forceinline wchar_t tolower( wchar_t c )
+
+
+__forceinline wchar_t stub_tolower( wchar_t c )
 {
     if ( c >= 'A' && c <= 'Z' ) {
         return c + 0x20;
@@ -143,9 +152,9 @@ __forceinline int stub_strcmp( const wchar_t* p1, const wchar_t* p2 )
 
 __forceinline int stub_stricmp( const char* p1, const char* p2 )
 {
-    const unsigned char* s1 = (const unsigned char*)p1;
-    const unsigned char* s2 = (const unsigned char*)p2;
-    unsigned char c1, c2;
+    const char* s1 = (const char*)p1;
+    const char* s2 = (const char*)p2;
+    char c1, c2;
 
     do {
         c1 = *s1++;
@@ -155,10 +164,12 @@ __forceinline int stub_stricmp( const char* p1, const char* p2 )
             return c1 - c2;
         }
 
-    } while ( tolower( c1 ) ==  tolower( c2 ) );
+    } while ( stub_tolower( c1 ) ==  stub_tolower( c2 ) );
 
     return c1 - c2;
 }
+
+
 
 __forceinline int stub_stricmp( const wchar_t* p1, const wchar_t* p2 )
 {
@@ -174,7 +185,7 @@ __forceinline int stub_stricmp( const wchar_t* p1, const wchar_t* p2 )
             return ( ( c1 - c2 ) >> 1 );
         }
 
-    } while ( tolower( c1 ) == tolower( c2 ) );
+    } while ( stub_tolower( c1 ) == stub_tolower( c2 ) );
 
     return ( ( c1 - c2 ) >> 1 );
 }
@@ -211,5 +222,27 @@ __forceinline int stub_strncmp( wchar_t* s1, wchar_t* s2, size_t n )
         }
     }
     return ( ( c1 - c2 ) >> 1 );
+}
+
+
+
+__forceinline void* stub_memcpy( void* dst, const void* src, size_t n )
+{
+    unsigned char* d = (unsigned char*)dst;
+    unsigned char* s = (unsigned char*)src;
+    while ( n-- ) {
+        *d++ = *s++;
+    }
+    return dst;
+}
+
+
+
+__forceinline void stub_memset( void* dst, int c, size_t size )
+{
+    unsigned char* d = (unsigned char*)dst;
+    while ( size-- ) {
+        *d++ = (unsigned char)c;
+    }
 }
 
