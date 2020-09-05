@@ -142,6 +142,7 @@
     <ClInclude Include="packer.h" />
     <ClInclude Include="pe.h" />
     <ClInclude Include="strings.h" />
+    <ClInclude Include="stub.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="miniz-2.1.0\LICENSE" />

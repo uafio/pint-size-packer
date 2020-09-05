@@ -41,6 +41,9 @@
     <ClInclude Include="packer.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="stub.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="miniz-2.1.0\LICENSE">

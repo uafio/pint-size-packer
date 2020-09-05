@@ -42,10 +42,11 @@ public:
         for ( int i = 0; i < pe.get_sections().size(); i++ ) {
 
             Section* section = pe.get_sections().at( i );
+            section->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
+
             if ( section->hdr.SizeOfRawData <= pe.optional_hdr()->FileAlignment ) {
                 continue;
             }
-            printf( "packing section: %s\n", section->hdr.Name );
 
             void* pCmp = nullptr;
             size_t cmp_len = 0;
@@ -58,10 +59,7 @@ public:
                 section->data = pCmp;
                 section->hdr.SizeOfRawData = (DWORD)cmp_len_align;
                 section->hdr.PointerToLinenumbers = (DWORD)cmp_len;
-
-                section->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
             }
-
         }
 
 
@@ -119,6 +117,7 @@ public:
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR )->Size = 0;
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR )->VirtualAddress = 0;
         
+
 
         return true;
     }
