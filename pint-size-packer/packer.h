@@ -17,10 +17,10 @@ private:
     Packer( const Packer& );
     PEFile& pe;
 
-    bool _compress( void* data, size_t size, void** ppCmp, size_t* pCmpSize )
+    bool _compress( void* data, size_t size, void** ppCmp, uint32_t* pCmpSize )
     {
         uLong cmp_len = compressBound( (mz_ulong)size );
-        const size_t cmp_len_align = pe.align_up< size_t >( cmp_len, pe.optional_hdr()->FileAlignment );
+        const size_t cmp_len_align = pe.align_file( cmp_len );
 
         uint8_t* pCmp = (mz_uint8*)calloc( cmp_len_align, 1 );
 
@@ -55,7 +55,7 @@ public:
 
 
             void* pCmp = nullptr;
-            size_t cmp_len = 0;
+            uint32_t cmp_len = 0;
 
             if ( _compress( section->data, section->hdr.SizeOfRawData, &pCmp, &cmp_len ) ) {
 
@@ -63,7 +63,7 @@ public:
 
                 section->data = pCmp;
                 section->hdr.PointerToLinenumbers = (DWORD)section->hdr.SizeOfRawData;
-                section->hdr.SizeOfRawData = (DWORD)pe.align_up< size_t >( cmp_len, pe.optional_hdr()->FileAlignment );
+                section->hdr.SizeOfRawData = pe.align_file( cmp_len );
 
             }
 

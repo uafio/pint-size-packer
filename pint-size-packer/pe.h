@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <vector>
 #include <fstream>
+#include <assert.h>
 #include "strings.h"
 
 class Section
@@ -53,15 +54,29 @@ private:
         return true;
     }
 
-    constexpr inline char separator( void )
+    void sections_update( void )
     {
-#if _WIN32
-        return '\\';
-#else
-        return '/';
-#endif
+        uint32_t raw = size_of_headers();
+        uint32_t rav = align_section( raw );
+
+        for ( auto section : sections ) {
+            section->hdr.PointerToRawData = raw;
+            section->hdr.VirtualAddress = rav;
+
+            raw += section->hdr.SizeOfRawData;
+            rav += align_section( section->hdr.Misc.VirtualSize );
+        }
     }
 
+    template< class T >
+    T align_up( T addr, size_t alignment )
+    {
+        size_t pad = (uintptr_t)addr % alignment;
+        if ( pad ) {
+            return (uintptr_t)addr + alignment - pad;
+        }
+        return addr;
+    }
 
 public:
     PEFile( const char* fpath )
@@ -138,16 +153,6 @@ public:
         return nullptr;
     }
 
-    template< class T >
-    T align_up( T addr, size_t alignment )
-    {
-        size_t pad = (uintptr_t)addr % alignment;
-        if ( pad ) {
-            return (uintptr_t)addr + alignment - pad;
-        }
-        return addr;
-    }
-
     size_t rva2fo( size_t rva )
     {
         if ( rva <= section_hdr( 0U )->PointerToRawData ) {
@@ -170,7 +175,6 @@ public:
         return 0;
     }
 
-
     void* section( uint32_t index )
     {
         if ( index < sections.size() ) {
@@ -183,21 +187,16 @@ public:
     void* section( const char* name )
     {
         if ( sections.size() ) {
-
             for ( auto section : sections ) {
-            
                 if ( strncmp( name, reinterpret_cast< char* >( section->hdr.Name ), sizeof( section->hdr.Name ) ) == 0 ) {
                     return section->data;
                 }
-            
             }
 
             return nullptr;
-            
         }
         return reinterpret_cast< char* >( data ) + section_hdr( name )->PointerToRawData;
     }
-
 
     bool section_add( PIMAGE_SECTION_HEADER shdr, void* sdata )
     {
@@ -209,43 +208,32 @@ public:
         sections.push_back( new Section( shdr, sdata, shdr->SizeOfRawData ) );
 
         file_hdr()->NumberOfSections++;
-
         optional_hdr()->SizeOfImage += align_section( shdr->Misc.VirtualSize );
-
-        if ( size_of_headers() > optional_hdr()->SizeOfHeaders ) {
-        
-            optional_hdr()->SizeOfHeaders = (DWORD)size_of_headers();
-        
-        }
+        optional_hdr()->SizeOfHeaders = (DWORD)size_of_headers();
 
         return true;
     }
 
-
-
-    size_t size_of_headers( void )
+    uint32_t size_of_headers( void )
     {
-        size_t result = 0;
+        uint32_t result = 0;
 
         result += pe_hdr()->e_lfanew;
         result += sizeof( IMAGE_NT_HEADERS64 );
-        result += sizeof( IMAGE_SECTION_HEADER ) * sections.size();
+        result += sizeof( IMAGE_SECTION_HEADER ) * (uint32_t)sections.size();
 
-        return align_up< size_t >( result, optional_hdr()->FileAlignment );
+        return align_file( result );
     }
-
 
     uint32_t align_file( uint32_t value )
     {
         return (uint32_t)align_up< size_t >( value, optional_hdr()->FileAlignment );
     }
 
-
     uint32_t align_section( uint32_t value )
     {
         return (uint32_t)align_up< size_t >( value, optional_hdr()->SectionAlignment );
     }
-
 
     bool save( const char* fname )
     {
@@ -256,24 +244,13 @@ public:
         }
 
         file_hdr()->NumberOfSections = (WORD)sections.size();
+        sections_update();
 
         ofile.write( reinterpret_cast< char* >( pe_hdr() ), pe_hdr()->e_lfanew );
         ofile.write( reinterpret_cast< char* >( nt_hdr() ), sizeof( IMAGE_NT_HEADERS64 ) );
 
-        DWORD raw = (DWORD)size_of_headers();
-        DWORD rva = align_section( raw );
-
         for ( auto section : sections ) {
-        
-            PIMAGE_SECTION_HEADER shdr = &section->hdr;
-            shdr->VirtualAddress = rva;
-            shdr->PointerToRawData = raw;
-
-            rva = align_section( rva + shdr->Misc.VirtualSize );
-            raw = align_file( raw + shdr->SizeOfRawData );
-
             ofile.write( reinterpret_cast< char* >( &section->hdr ), sizeof( IMAGE_SECTION_HEADER ) );
-            
         }
 
         size_t pad = optional_hdr()->SizeOfHeaders - ofile.tellp();
@@ -286,6 +263,7 @@ public:
 
             pad = align_file( section->hdr.SizeOfRawData ) - section->hdr.SizeOfRawData;
             while ( pad-- ) {
+                assert( false ); // Debugging: Should not happen
                 ofile.write( "\x00", 1 );
             }
         }
@@ -293,8 +271,6 @@ public:
         return true;
     }
 };
-
-
 
 class PEHeader
 {
@@ -307,75 +283,57 @@ public:
     {
     }
 
-
     __forceinline void* get_base( void )
     {
         return base;
     }
-
 
     __forceinline void* rva2va( size_t rva )
     {
         return reinterpret_cast< char* >( base ) + rva;
     }
 
-
     __forceinline PIMAGE_DOS_HEADER pe_hdr( void )
     {
         return reinterpret_cast< PIMAGE_DOS_HEADER >( base );
     }
-
-
 
     __forceinline PIMAGE_NT_HEADERS64 nt_hdr( void )
     {
         return reinterpret_cast< PIMAGE_NT_HEADERS64 >( reinterpret_cast< uintptr_t >( base ) + pe_hdr()->e_lfanew );
     }
 
-
-
     __forceinline PIMAGE_FILE_HEADER file_hdr( void )
     {
         return &nt_hdr()->FileHeader;
     }
-
-
 
     __forceinline PIMAGE_OPTIONAL_HEADER64 optional_hdr( void )
     {
         return &nt_hdr()->OptionalHeader;
     }
 
-
-
     __forceinline PIMAGE_DATA_DIRECTORY data_dir( size_t index )
     {
         return &optional_hdr()->DataDirectory[index];
     }
-
-
 
     __forceinline PIMAGE_SECTION_HEADER section_hdr( uint32_t index )
     {
         return IMAGE_FIRST_SECTION( nt_hdr() ) + index;
     }
 
-
-
     __forceinline PIMAGE_SECTION_HEADER section_hdr( const char* sname )
     {
         for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
-
             auto section = section_hdr( i );
 
             if ( stub_strncmp( sname, reinterpret_cast< char* >( section->Name ), sizeof( section->Name ) ) == 0 ) {
                 return section;
             }
-
         }
-        return nullptr;    
+        return nullptr;
     }
-
 
     template< class T >
     __forceinline T align_up( T addr, size_t alignment )
@@ -386,7 +344,4 @@ public:
         }
         return addr;
     }
-
 };
-
-
