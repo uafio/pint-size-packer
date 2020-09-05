@@ -270,6 +270,11 @@ public:
 
         for ( auto section : sections ) {
             ofile.write( reinterpret_cast< char* >( section->data ), section->hdr.SizeOfRawData );
+
+            pad = align_up< size_t >( section->hdr.SizeOfRawData, optional_hdr()->FileAlignment ) - section->hdr.SizeOfRawData;
+            while ( pad-- ) {
+                ofile.write( "\x00", 1 );
+            }
         }
 
         return true;
@@ -287,6 +292,12 @@ public:
     __forceinline PEHeader( void* addr )
         : base( addr )
     {
+    }
+
+
+    __forceinline void* get_base( void )
+    {
+        return base;
     }
 
 
