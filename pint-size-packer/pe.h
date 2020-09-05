@@ -235,6 +235,17 @@ public:
     }
 
 
+    uint32_t align_file( uint32_t value )
+    {
+        return align_up( value, optional_hdr()->FileAlignment );
+    }
+
+
+    uint32_t align_section( uint32_t value )
+    {
+        return align_up( value, optional_hdr()->SectionAlignment );
+    }
+
 
     bool save( const char* fname )
     {
