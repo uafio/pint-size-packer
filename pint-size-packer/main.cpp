@@ -1,5 +1,10 @@
+#include <Windows.h>
 #include <stdio.h>
+#include <stdint.h>
 #include "pe.h"
+#include "miniz-2.1.0/miniz.h"
+#include "packer.h"
+
 
 int main( int argc, char** argv )
 {
@@ -7,9 +12,14 @@ int main( int argc, char** argv )
         return printf( "Usage: %s <infile>\n", argv[0] );
     }
 
-    PEFile pe( argv[1] );
+    PEFile input( argv[1] );
 
-    pe.save( "psp2.exe" );
+    Packer packer( input );
+
+    packer.pack();
+
+
+    input.save( "packed.exe" );
 
 
     return 0;
