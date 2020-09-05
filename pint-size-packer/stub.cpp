@@ -3,6 +3,7 @@
 #include <winternl.h>
 #include "strings.h"
 #include "pe.h"
+#include "miniz-2.1.0/miniz.h"
 
 #define STUB_DATA __declspec( allocate( ".stub" ) )
 #pragma code_seg( push, ".stub" )
@@ -15,6 +16,11 @@ typedef NTSTATUS( NTAPI* NtFreeVirtualMemory_t )( HANDLE ProcessHandle, PVOID* B
 typedef NTSTATUS( NTAPI* NtProtectVirtualMemory_t )( HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T NumberOfBytesToProtect, ULONG NewProtect, PULONG OldProtect );
 typedef void*( WINAPI* GetProcAddress_t )( void* hModule, char* apiname );
 typedef void*( WINAPI* LoadLibraryA_t )( char* lib );
+
+//
+// Globals
+//
+STUB_DATA uint32_t OriginalEntryPoint;
 
 //
 // Function Pointer Declarations
@@ -42,6 +48,7 @@ STUB_DATA char sNtFreeVirtualMemory[] = "NtFreeVirtualMemory";
 STUB_DATA char sNtAllocateVirtualMemory[] = "NtAllocateVirtualMemory";
 STUB_DATA char sNtProtectVirtualMemory[] = "NtProtectVirtualMemory";
 STUB_DATA char sStubSectionName[] = ".stub";
+
 
 
 #pragma check_stack( off )
@@ -116,10 +123,44 @@ __declspec( safebuffers ) DECLSPEC_NOINLINE static void stub_init( void )
 
 
 
+__declspec( safebuffers ) DECLSPEC_NOINLINE static void decompress_sections( void )
+{
+    PEHeader pe( NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1] );
+
+    for ( int i = 0; i < pe.file_hdr()->NumberOfSections; i++ ) {
+    
+        PIMAGE_SECTION_HEADER section = pe.section_hdr( i );
+        if ( section->PointerToLinenumbers == 0 ) {
+            continue;
+        }
+        
+        uint8_t* pCmp = (uint8_t*)pe.rva2va( section->VirtualAddress );
+        uint8_t* pUncomp = nullptr;
+        mz_ulong cmp_len = section->PointerToLinenumbers;
+        size_t uncomp_len = pe.align_up< size_t >( section->Misc.VirtualSize, pe.optional_hdr()->SectionAlignment );
+
+        pNtAllocateVirtualMemory( (HANDLE)-1, (void**)&pUncomp, NULL, &uncomp_len, MEM_COMMIT, PAGE_READWRITE );
+
+        uncompress( pUncomp, (mz_ulong*)&uncomp_len, pCmp, cmp_len );
+        
+        stub_memcpy( pCmp, pUncomp, uncomp_len );
+
+        pNtFreeVirtualMemory( (HANDLE)-1, (void**)&pUncomp, &uncomp_len, MEM_RELEASE );
+
+    }
+}
+
+
 #pragma check_stack( off )
-__declspec( safebuffers ) extern "C" DECLSPEC_NOINLINE void unpack( void )
+extern "C" DECLSPEC_NOINLINE DECLSPEC_NORETURN void unpack( void )
 {
     stub_init();
+    decompress_sections();
+
+    char* base = (char*)NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1];
+
+    ( ( void ( * )( void ) )( base + OriginalEntryPoint ) )();
+
 }
 
 
