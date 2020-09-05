@@ -203,14 +203,14 @@ public:
     {
         PIMAGE_SECTION_HEADER lastsechdr = &sections.back()->hdr;
 
-        shdr->VirtualAddress = (DWORD)align_up< size_t >( lastsechdr->VirtualAddress + lastsechdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
-        shdr->PointerToRawData = lastsechdr->PointerToRawData + lastsechdr->SizeOfRawData;
+        shdr->VirtualAddress = align_section( lastsechdr->VirtualAddress + lastsechdr->Misc.VirtualSize );
+        shdr->PointerToRawData = align_file( lastsechdr->PointerToRawData + lastsechdr->SizeOfRawData );
 
         sections.push_back( new Section( shdr, sdata, shdr->SizeOfRawData ) );
 
         file_hdr()->NumberOfSections++;
 
-        optional_hdr()->SizeOfImage += (DWORD)align_up< size_t >( shdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
+        optional_hdr()->SizeOfImage += align_section( shdr->Misc.VirtualSize );
 
         if ( size_of_headers() > optional_hdr()->SizeOfHeaders ) {
         
@@ -237,13 +237,13 @@ public:
 
     uint32_t align_file( uint32_t value )
     {
-        return align_up( value, optional_hdr()->FileAlignment );
+        return (uint32_t)align_up< size_t >( value, optional_hdr()->FileAlignment );
     }
 
 
     uint32_t align_section( uint32_t value )
     {
-        return align_up( value, optional_hdr()->SectionAlignment );
+        return (uint32_t)align_up< size_t >( value, optional_hdr()->SectionAlignment );
     }
 
 
@@ -255,11 +255,13 @@ public:
             return false;
         }
 
+        file_hdr()->NumberOfSections = (WORD)sections.size();
+
         ofile.write( reinterpret_cast< char* >( pe_hdr() ), pe_hdr()->e_lfanew );
         ofile.write( reinterpret_cast< char* >( nt_hdr() ), sizeof( IMAGE_NT_HEADERS64 ) );
 
         DWORD raw = (DWORD)size_of_headers();
-        DWORD rva = (DWORD)align_up< size_t >( raw, optional_hdr()->SectionAlignment );
+        DWORD rva = align_section( raw );
 
         for ( auto section : sections ) {
         
@@ -267,8 +269,8 @@ public:
             shdr->VirtualAddress = rva;
             shdr->PointerToRawData = raw;
 
-            rva = (DWORD)align_up< size_t >( rva + shdr->Misc.VirtualSize, optional_hdr()->SectionAlignment );
-            raw = (DWORD)align_up< size_t >( raw + shdr->SizeOfRawData, optional_hdr()->FileAlignment );
+            rva = align_section( rva + shdr->Misc.VirtualSize );
+            raw = align_file( raw + shdr->SizeOfRawData );
 
             ofile.write( reinterpret_cast< char* >( &section->hdr ), sizeof( IMAGE_SECTION_HEADER ) );
             
@@ -282,7 +284,7 @@ public:
         for ( auto section : sections ) {
             ofile.write( reinterpret_cast< char* >( section->data ), section->hdr.SizeOfRawData );
 
-            pad = align_up< size_t >( section->hdr.SizeOfRawData, optional_hdr()->FileAlignment ) - section->hdr.SizeOfRawData;
+            pad = align_file( section->hdr.SizeOfRawData ) - section->hdr.SizeOfRawData;
             while ( pad-- ) {
                 ofile.write( "\x00", 1 );
             }
