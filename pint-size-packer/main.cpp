@@ -8,9 +8,10 @@
 
 int main( int argc, char** argv )
 {
-    if ( argc != 2 ) {
-        return printf( "Usage: %s <infile>\n", argv[0] );
+    if ( argc != 3 ) {
+        return printf( "Usage: %s <infile> <outfile>\n", argv[0] );
     }
+
 
     PEFile input( argv[1] );
 
@@ -18,8 +19,7 @@ int main( int argc, char** argv )
 
     packer.pack();
 
-
-    input.save( "packed.exe" );
+    input.save( argv[2] );
 
 
     return 0;
