@@ -83,22 +83,41 @@ public:
         pe.optional_hdr()->AddressOfEntryPoint = stub_section_hdr.VirtualAddress + (DWORD)offset;
 
 
+        // These can be corrupted
 
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->Size += 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->VirtualAddress += 0x125463;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXCEPTION )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXCEPTION )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DEBUG )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DEBUG )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_SECURITY )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_SECURITY )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_ARCHITECTURE )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_ARCHITECTURE )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_GLOBALPTR )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_GLOBALPTR )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT )->VirtualAddress = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT )->Size = 0;
+        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT )->VirtualAddress = 0;
+
+
+        // TODO: These need fixing
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXPORT )->Size = 0;
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXPORT )->VirtualAddress = 0;
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_IAT )->Size = 0;
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_IAT )->VirtualAddress = 0;
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_RESOURCE )->Size = 0;
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_RESOURCE )->VirtualAddress = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXCEPTION )->Size = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXCEPTION )->VirtualAddress = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_DEBUG )->Size = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_DEBUG )->VirtualAddress = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->Size = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->VirtualAddress = 0;
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG )->Size = 0;
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG )->VirtualAddress = 0;
-
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_TLS )->Size = 0;
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_TLS )->VirtualAddress = 0;
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR )->Size = 0;
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR )->VirtualAddress = 0;
         
 
         return true;
