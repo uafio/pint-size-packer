@@ -21,6 +21,8 @@ typedef void*( WINAPI* LoadLibraryA_t )( char* lib );
 // Globals
 //
 STUB_DATA uint32_t OriginalEntryPoint;
+STUB_DATA IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+STUB_DATA size_t ImageBase;
 
 //
 // Function Pointer Declarations
@@ -52,7 +54,7 @@ STUB_DATA char sStubSectionName[] = ".stub";
 
 
 #pragma check_stack( off )
-__declspec( safebuffers ) DECLSPEC_NOINLINE void* get_module_address( const wchar_t* name )
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE void* get_module_address( const wchar_t* name )
 {
     PLIST_ENTRY head = &NtCurrentTeb()->ProcessEnvironmentBlock->Ldr->InMemoryOrderModuleList;
     PLIST_ENTRY cur = head->Flink;
@@ -76,7 +78,7 @@ __declspec( safebuffers ) DECLSPEC_NOINLINE void* get_module_address( const wcha
 
 
 #pragma check_stack( off )
-__declspec( safebuffers ) DECLSPEC_NOINLINE void* get_proc_address( void* hModule, char* apiname )
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE void* get_proc_address( void* hModule, char* apiname )
 {
     PEHeader pe( hModule );
 
@@ -103,9 +105,11 @@ __declspec( safebuffers ) DECLSPEC_NOINLINE void* get_proc_address( void* hModul
     return nullptr;
 }
 
+
+
 #pragma check_stack( off )
 #pragma strict_gs_check( off )
-__declspec( safebuffers ) DECLSPEC_NOINLINE static void stub_init( void )
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void stub_init( void )
 {
     pKernel32 = get_module_address( wcKernel32 );
     pNtdll = get_module_address( wcNtdll );
@@ -123,7 +127,8 @@ __declspec( safebuffers ) DECLSPEC_NOINLINE static void stub_init( void )
 
 
 
-__declspec( safebuffers ) DECLSPEC_NOINLINE static void decompress_sections( void )
+
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
 {
     PEHeader pe( NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1] );
 
@@ -136,8 +141,8 @@ __declspec( safebuffers ) DECLSPEC_NOINLINE static void decompress_sections( voi
         
         uint8_t* pCmp = (uint8_t*)pe.rva2va( section->VirtualAddress );
         uint8_t* pUncomp = nullptr;
-        mz_ulong cmp_len = section->PointerToLinenumbers;
-        size_t uncomp_len = pe.align_up< size_t >( section->Misc.VirtualSize, pe.optional_hdr()->SectionAlignment );
+        size_t uncomp_len = section->PointerToLinenumbers;
+        mz_ulong cmp_len = section->SizeOfRawData;
 
         pNtAllocateVirtualMemory( (HANDLE)-1, (void**)&pUncomp, NULL, &uncomp_len, MEM_COMMIT, PAGE_READWRITE );
 
@@ -151,16 +156,133 @@ __declspec( safebuffers ) DECLSPEC_NOINLINE static void decompress_sections( voi
 }
 
 
+
+#pragma check_stack( off )
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe )
+{
+    if ( pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->Size == 0 ) {
+        return;
+    }
+
+    PIMAGE_DATA_DIRECTORY dir_iat = pe.data_dir( IMAGE_DIRECTORY_ENTRY_IAT );
+    size_t iat_size = dir_iat->Size;
+    void* iat_addr = pe.rva2va( dir_iat->VirtualAddress );
+    DWORD prot;
+    pNtProtectVirtualMemory( (HANDLE)-1, &iat_addr, &iat_size, PAGE_READWRITE, &prot );
+
+    PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR)pe.rva2va( pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->VirtualAddress );
+
+    while ( import_desc->Name ) {
+    
+        void* hModule = pLoadLibraryA( (char*)pe.rva2va( import_desc->Name ) );
+
+        PIMAGE_THUNK_DATA lookup = (PIMAGE_THUNK_DATA)pe.rva2va( import_desc->OriginalFirstThunk );
+        PIMAGE_THUNK_DATA iat = (PIMAGE_THUNK_DATA)pe.rva2va( import_desc->FirstThunk );
+
+        while ( lookup->u1.AddressOfData ) {
+
+            if ( IMAGE_SNAP_BY_ORDINAL( lookup->u1.Ordinal ) ) {
+
+                iat->u1.Function = (uint64_t)pGetProcAddress( hModule, (char*)pe.rva2va( IMAGE_ORDINAL( lookup->u1.AddressOfData ) ) );
+            
+            } else {
+
+                char* name = (char*)( (PIMAGE_IMPORT_BY_NAME)pe.rva2va( lookup->u1.AddressOfData ) )->Name;
+                iat->u1.Function = (uint64_t)pGetProcAddress( hModule, name );
+
+            }
+
+            lookup++;
+            iat++;
+        }
+
+        import_desc++;
+    
+    }
+
+
+    
+    pNtProtectVirtualMemory( (HANDLE)-1, &iat_addr, &iat_size, prot, &prot );
+}
+
+
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_reloc_dir( PEHeader& pe )
+{
+    PIMAGE_DATA_DIRECTORY reloc_dir = pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC );
+
+    if ( reloc_dir->Size == 0 ) {
+        return;
+    }
+
+    size_t delta = ( (uintptr_t)pe.get_base() - ImageBase );
+    PIMAGE_BASE_RELOCATION reloc_table = (PIMAGE_BASE_RELOCATION)pe.rva2va( reloc_dir->VirtualAddress );
+    void* table_end = (char*)reloc_table + reloc_dir->Size;
+
+    while ( reloc_table < table_end && reloc_table->SizeOfBlock ) {
+        struct _Reloc {
+            WORD Offset : 12;
+            WORD Type : 4;
+        }* reloc = (_Reloc*)( reloc_table + 1 );
+
+        DWORD count = ( reloc_table->SizeOfBlock - sizeof( *reloc_table ) ) / sizeof( WORD );
+
+        for ( DWORD i = 0; i < count; i++ ) {
+            uintptr_t* va = (uintptr_t*)( (uintptr_t)pe.rva2va( reloc_table->VirtualAddress ) + reloc[i].Offset );
+            switch ( reloc[i].Type ) {
+                case IMAGE_REL_BASED_HIGH:
+                    *va += HIWORD( delta );
+                    break;
+                case IMAGE_REL_BASED_LOW:
+                    *va += LOWORD( delta );
+                    break;
+                case IMAGE_REL_BASED_HIGHLOW:
+                    *va += delta;
+                    break;
+                case IMAGE_REL_BASED_DIR64:
+                    *va += delta;
+                    break;
+            }
+        }
+
+        reloc_table = ( PIMAGE_BASE_RELOCATION )( (uintptr_t)reloc_table + reloc_table->SizeOfBlock );
+    }
+}
+
+
+
+#pragma check_stack( off )
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_data_dirs( void )
+{
+    void* base = NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1];
+    PEHeader pe( base );
+
+    DWORD old_prot;
+    size_t hdrs_size = pe.optional_hdr()->SizeOfHeaders;
+    pNtProtectVirtualMemory( (HANDLE)-1, &base, &hdrs_size, PAGE_READWRITE, &old_prot );
+
+    for ( int i = 0; i < _countof( DataDirectory ); i++ ) {
+        *pe.data_dir( i ) = DataDirectory[i];
+    }
+
+    pNtProtectVirtualMemory( (HANDLE)-1, &base, &hdrs_size, old_prot, &old_prot );
+    
+    fix_import_dir( pe );
+    fix_reloc_dir( pe );
+}
+
+
+
+
 #pragma check_stack( off )
 extern "C" DECLSPEC_NOINLINE DECLSPEC_NORETURN void unpack( void )
 {
     stub_init();
     decompress_sections();
+    fix_data_dirs();
 
     char* base = (char*)NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1];
 
     ( ( void ( * )( void ) )( base + OriginalEntryPoint ) )();
-
 }
 
 
