@@ -78,6 +78,32 @@ private:
         return addr;
     }
 
+
+    PIMAGE_SECTION_HEADER section_hdr( uint32_t index )
+    {
+        return IMAGE_FIRST_SECTION( nt_hdr() ) + index;
+    }
+
+
+    PIMAGE_SECTION_HEADER section_hdr( const char* name )
+    {
+        for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
+            auto section = section_hdr( i );
+
+            if ( strncmp( name, reinterpret_cast< char* >( section->Name ), sizeof( section->Name ) ) == 0 ) {
+                return section;
+            }
+        }
+        return nullptr;
+    }
+
+    void* section_data( uint32_t index )
+    {
+        return reinterpret_cast< char* >( data ) + section_hdr( index )->PointerToRawData;
+    }
+
+
+
 public:
     PEFile( const char* fpath )
         : data( nullptr ), size( 0 )
@@ -85,7 +111,7 @@ public:
         if ( get_file_content( fpath ) ) {
             for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
                 auto shdr = section_hdr( i );
-                auto sdata = section( i );
+                auto sdata = section_data( i );
                 sections.push_back( new Section( shdr, sdata, shdr->SizeOfRawData ) );
             }
         }
@@ -136,22 +162,6 @@ public:
         return &optional_hdr()->DataDirectory[index];
     }
 
-    PIMAGE_SECTION_HEADER section_hdr( uint32_t index )
-    {
-        return IMAGE_FIRST_SECTION( nt_hdr() ) + index;
-    }
-
-    PIMAGE_SECTION_HEADER section_hdr( const char* name )
-    {
-        for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
-            auto section = section_hdr( i );
-
-            if ( strncmp( name, reinterpret_cast< char* >( section->Name ), sizeof( section->Name ) ) == 0 ) {
-                return section;
-            }
-        }
-        return nullptr;
-    }
 
     size_t rva2fo( size_t rva )
     {
@@ -175,27 +185,16 @@ public:
         return 0;
     }
 
-    void* section( uint32_t index )
-    {
-        if ( index < sections.size() ) {
-            return sections.at( index )->data;
-        }
 
-        return reinterpret_cast< char* >( data ) + section_hdr( index )->PointerToRawData;
-    }
-
-    void* section( const char* name )
+    Section* section( const char* name )
     {
-        if ( sections.size() ) {
-            for ( auto section : sections ) {
-                if ( strncmp( name, reinterpret_cast< char* >( section->hdr.Name ), sizeof( section->hdr.Name ) ) == 0 ) {
-                    return section->data;
-                }
+        for ( auto section : sections ) {
+            if ( strncmp( name, reinterpret_cast< char* >( section->hdr.Name ), sizeof( section->hdr.Name ) ) == 0 ) {
+                return section;
             }
-
-            return nullptr;
         }
-        return reinterpret_cast< char* >( data ) + section_hdr( name )->PointerToRawData;
+
+        return nullptr;
     }
 
     bool section_add( PIMAGE_SECTION_HEADER shdr, void* sdata )
@@ -243,8 +242,9 @@ public:
             return false;
         }
 
-        file_hdr()->NumberOfSections = (WORD)sections.size();
         sections_update();
+
+        file_hdr()->NumberOfSections = (WORD)sections.size();
 
         ofile.write( reinterpret_cast< char* >( pe_hdr() ), pe_hdr()->e_lfanew );
         ofile.write( reinterpret_cast< char* >( nt_hdr() ), sizeof( IMAGE_NT_HEADERS64 ) );
