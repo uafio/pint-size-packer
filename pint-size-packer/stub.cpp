@@ -140,6 +140,7 @@ DECLSPEC_NOINLINE void* stub_memcpy_reverse( void* dst, const void* src, uint32_
     unsigned char* d = (unsigned char*)dst;
     unsigned char* s = (unsigned char*)src;
 
+    // LOL idk why but when I inline this function and use while( --n >= 0 ) the compiled generated an infinite loop
     for ( int i = n - 1; i >= 0; i-- ) {
         d[i] = s[i];
     }
