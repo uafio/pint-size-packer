@@ -16,8 +16,13 @@ public:
     Section( PIMAGE_SECTION_HEADER hdr, void* data, size_t size )
     {
         this->hdr = *hdr;
-        this->data = malloc( size );
-        memcpy( this->data, data, size );
+        if ( data && size ) {
+            this->data = malloc( size );
+            memcpy( this->data, data, size );
+        } else {
+            this->data = nullptr;
+            size = 0;
+        }
     }
 
     ~Section( void )
@@ -105,6 +110,17 @@ public:
     {
         memset( section->hdr.Name, 0, 8 );
         strncpy( reinterpret_cast< char* >( section->hdr.Name ), name, 8 );
+    }
+
+    bool replace( Section* item, Section* newitem )
+    {
+        for ( auto& section : sections ) {
+            if ( section == item ) {
+                section = newitem;
+                return true;
+            }
+        }
+        return false;
     }
 
     void merge( void )
@@ -357,6 +373,7 @@ public:
         }
 
         for ( auto section : sections.get() ) {
+
             ofile.write( reinterpret_cast< char* >( section->data ), section->hdr.SizeOfRawData );
 
             pad = align_file( section->hdr.SizeOfRawData ) - section->hdr.SizeOfRawData;
