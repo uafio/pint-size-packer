@@ -5,6 +5,8 @@
 #include "pe.h"
 #include "miniz-2.1.0/miniz.h"
 
+#define NtCurrentProcess (HANDLE)-1
+#define ImageBaseAddress NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1]
 #define STUB_DATA __declspec( allocate( ".stub" ) )
 #pragma code_seg( push, ".stub" )
 
@@ -56,8 +58,12 @@ STUB_DATA char sStubSectionName[] = ".stub";
 
 
 #pragma check_stack( off )
-DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE void* get_module_address( const wchar_t* name )
+DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE void* get_module_handle( const wchar_t* name )
 {
+    if ( name == nullptr ) {
+        return ImageBaseAddress;
+    }
+
     PLIST_ENTRY head = &NtCurrentTeb()->ProcessEnvironmentBlock->Ldr->InMemoryOrderModuleList;
     PLIST_ENTRY cur = head->Flink;
 
@@ -113,8 +119,8 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE void* get_proc_address( void* hModule, ch
 #pragma strict_gs_check( off )
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void stub_init( void )
 {
-    pKernel32 = get_module_address( wcKernel32 );
-    pNtdll = get_module_address( wcNtdll );
+    pKernel32 = get_module_handle( wcKernel32 );
+    pNtdll = get_module_handle( wcNtdll );
 
     _ReadWriteBarrier();
 
@@ -124,6 +130,8 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void stub_init( void )
     pNtAllocateVirtualMemory = (NtAllocateVirtualMemory_t)get_proc_address( pNtdll, sNtAllocateVirtualMemory );
     pNtProtectVirtualMemory = (NtProtectVirtualMemory_t)get_proc_address( pNtdll, sNtProtectVirtualMemory );
 
+
+
     _ReadWriteBarrier();
 }
 
@@ -132,7 +140,7 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void stub_init( void )
 
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
 {
-    PEHeader pe( NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1] );
+    PEHeader pe( get_module_handle( 0 ) );
 
     for ( int i = 0; i < pe.file_hdr()->NumberOfSections; i++ ) {
     
@@ -146,13 +154,13 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
         size_t uncomp_len = section->PointerToLinenumbers;
         mz_ulong cmp_len = section->SizeOfRawData;
 
-        pNtAllocateVirtualMemory( (HANDLE)-1, (void**)&pUncomp, NULL, &uncomp_len, MEM_COMMIT, PAGE_READWRITE );
+        pNtAllocateVirtualMemory( NtCurrentProcess, (void**)&pUncomp, NULL, &uncomp_len, MEM_COMMIT, PAGE_READWRITE );
 
         uncompress( pUncomp, (mz_ulong*)&uncomp_len, pCmp, cmp_len );
         
         stub_memcpy( pCmp, pUncomp, uncomp_len );
 
-        pNtFreeVirtualMemory( (HANDLE)-1, (void**)&pUncomp, &uncomp_len, MEM_RELEASE );
+        pNtFreeVirtualMemory( NtCurrentProcess, (void**)&pUncomp, &uncomp_len, MEM_RELEASE );
 
     }
 }
@@ -170,7 +178,7 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe 
     size_t iat_size = dir_iat->Size;
     void* iat_addr = pe.rva2va( dir_iat->VirtualAddress );
     DWORD prot;
-    pNtProtectVirtualMemory( (HANDLE)-1, &iat_addr, &iat_size, PAGE_READWRITE, &prot );
+    pNtProtectVirtualMemory( NtCurrentProcess, &iat_addr, &iat_size, PAGE_READWRITE, &prot );
 
     PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR)pe.rva2va( pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->VirtualAddress );
 
@@ -255,18 +263,18 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_reloc_dir( PEHeader& pe )
 #pragma check_stack( off )
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_data_dirs( void )
 {
-    void* base = NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1];
+    void* base = get_module_handle( 0 );
     PEHeader pe( base );
 
     DWORD old_prot;
     size_t hdrs_size = pe.optional_hdr()->SizeOfHeaders;
-    pNtProtectVirtualMemory( (HANDLE)-1, &base, &hdrs_size, PAGE_READWRITE, &old_prot );
+    pNtProtectVirtualMemory( NtCurrentProcess, &base, &hdrs_size, PAGE_READWRITE, &old_prot );
 
     for ( int i = 0; i < _countof( DataDirectory ); i++ ) {
         *pe.data_dir( i ) = DataDirectory[i];
     }
 
-    pNtProtectVirtualMemory( (HANDLE)-1, &base, &hdrs_size, old_prot, &old_prot );
+    pNtProtectVirtualMemory( NtCurrentProcess, &base, &hdrs_size, old_prot, &old_prot );
     
     fix_import_dir( pe );
     fix_reloc_dir( pe );
@@ -282,7 +290,7 @@ extern "C" DECLSPEC_NOINLINE DECLSPEC_NORETURN void unpack( void )
     decompress_sections();
     fix_data_dirs();
 
-    char* base = (char*)NtCurrentTeb()->ProcessEnvironmentBlock->Reserved3[1];
+    char* base = (char*)get_module_handle( 0 );
 
     ( ( void ( * )( void ) )( base + OriginalEntryPoint ) )();
 }
