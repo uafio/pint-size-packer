@@ -20,9 +20,11 @@ typedef void*( WINAPI* LoadLibraryA_t )( char* lib );
 //
 // Globals
 //
-STUB_DATA uint32_t OriginalEntryPoint;
-STUB_DATA IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
 STUB_DATA size_t ImageBase;
+STUB_DATA uint32_t OriginalEntryPoint;
+STUB_DATA uint32_t NumberOfSections;
+STUB_DATA IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+STUB_DATA IMAGE_SECTION_HEADER SectionHeaders[20];
 
 //
 // Function Pointer Declarations
