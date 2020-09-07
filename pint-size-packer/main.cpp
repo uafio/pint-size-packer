@@ -12,15 +12,12 @@ int main( int argc, char** argv )
         return printf( "Usage: %s <infile> <outfile>\n", argv[0] );
     }
 
+    PE input( argv[1] );
 
-    PEFile input( argv[1] );
-
-    Packer packer( input );
-
-    packer.pack();
+    Packer packer;
+    packer.pack( input );
 
     input.save( argv[2] );
-
 
     return 0;
 }

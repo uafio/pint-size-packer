@@ -6,18 +6,19 @@
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 extern "C" void unpack( void );
-extern uint32_t OriginalEntryPoint;
-extern IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
 extern size_t ImageBase;
+extern uint32_t OriginalEntryPoint;
+extern uint32_t NumberOfSections;
+extern IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+extern IMAGE_SECTION_HEADER SectionHeaders[20];
 
 
 class Packer
 {
 private:
     Packer( const Packer& );
-    PEFile& pe;
 
-    bool _compress( void* data, size_t size, void** ppCmp, uint32_t* pCmpSize )
+    bool _compress( void* data, size_t size, void** ppCmp, uint32_t* pCmpSize, PE& pe )
     {
         uLong cmp_len = compressBound( (mz_ulong)size );
         const size_t cmp_len_align = pe.align_file( cmp_len );
@@ -32,52 +33,36 @@ private:
         return cmp_status == Z_OK;
     }
 
-public:
-    Packer( PEFile& pefile )
-        : pe( pefile )
+    void save_stub_externs( PE& pe )
     {
-    }
-
-    virtual bool pack( void )
-    {
-        // Compress individual sections
-
-        auto alignment = pe.optional_hdr()->FileAlignment;
-
-        for ( int i = 0; i < pe.get_sections().size(); i++ ) {
-
-            Section* section = pe.get_sections().at( i );
-            section->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
-
-            if ( section->hdr.SizeOfRawData <= pe.optional_hdr()->FileAlignment ) {
-                continue;
-            }
-
-
-            void* pCmp = nullptr;
-            uint32_t cmp_len = 0;
-
-            if ( _compress( section->data, section->hdr.SizeOfRawData, &pCmp, &cmp_len ) ) {
-
-                free( section->data );
-
-                section->data = pCmp;
-                section->hdr.PointerToLinenumbers = (DWORD)section->hdr.SizeOfRawData;
-                section->hdr.SizeOfRawData = pe.align_file( cmp_len );
-
-            }
-
-
-        }
-
-        // Save the DATA_DIRECTORIES for the unpacker
-        memcpy( DataDirectory, pe.data_dir( 0 ), sizeof( DataDirectory ) );
-
         // Save ImageBase from the header for the relocations
         ImageBase = pe.optional_hdr()->ImageBase;
 
         // Save OEP
         OriginalEntryPoint = pe.optional_hdr()->AddressOfEntryPoint;
+
+        // Save the DATA_DIRECTORIES for the unpacker
+        memcpy( DataDirectory, pe.data_dir( 0 ), sizeof( DataDirectory ) );
+
+        // Save section headers so we know how to unpack them.
+        NumberOfSections = pe.file_hdr()->NumberOfSections;
+        memcpy( SectionHeaders, pe.section_hdr( 0U ), sizeof( IMAGE_SECTION_HEADER ) * pe.file_hdr()->NumberOfSections );
+    }
+
+
+
+public:
+    Packer( void )
+    {
+    }
+
+    virtual bool pack( PE& pe )
+    {
+        save_stub_externs( pe );
+
+        Section* rsrc = pe.sections.pop( ".rsrc" );
+
+        pe.sections.merge();
 
         // Add .stub section to the new exe
         PEHeader own( &__ImageBase );
@@ -86,13 +71,21 @@ public:
         stub_section_hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
         void* stub_section_data = own.rva2va( stub_section_hdr.VirtualAddress );
 
-        pe.section_add( &stub_section_hdr, stub_section_data );
+        pe.sections.add( new Section( &stub_section_hdr, stub_section_data, stub_section_hdr.SizeOfRawData ) );
+
+
+        if ( rsrc ) {
+            pe.sections.add( rsrc );
+        }
+
+        pe.update_headers();
 
         // Change the Entry Point to the unpacker
-        size_t offset = (uintptr_t)unpack - (uintptr_t)own.rva2va( own.section_hdr( ".stub" )->VirtualAddress );
-        pe.optional_hdr()->AddressOfEntryPoint = stub_section_hdr.VirtualAddress + (DWORD)offset;
+        uint32_t offset2section = ( uint32_t )( (uintptr_t)unpack - (uintptr_t)own.rva2va( own.section_hdr( ".stub" )->VirtualAddress ) );
+        pe.optional_hdr()->AddressOfEntryPoint = pe.sections[".stub"]->hdr.VirtualAddress + offset2section;
 
-
+        pe.sections.rename( pe.sections.get().at( 0 ), ".psp0" );
+        pe.sections.rename( pe.sections.get().at( 1 ), ".psp1" );
 
 
         // These can be corrupted at program load, we restore them later anyway

@@ -121,6 +121,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <DisableSpecificWarnings>
       </DisableSpecificWarnings>
+      <PreprocessorDefinitions>_MBCS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
