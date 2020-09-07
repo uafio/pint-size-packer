@@ -129,8 +129,9 @@ public:
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR )->VirtualAddress = 0;
 
         // We don't want Windows to corrupt our compressed data by trying to resolve relocations
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->Size = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->VirtualAddress = 0;
+        if ( rsrc ) {
+            pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->VirtualAddress = rsrc->hdr.VirtualAddress;
+        }
 
 
         return true;
