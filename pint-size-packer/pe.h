@@ -133,6 +133,8 @@ public:
         assert( offset == rawsize );
 
         Section* newsection = new Section( &hdr, data, rawsize );
+        
+        free( data );
 
         clear();
         add( newsection );
