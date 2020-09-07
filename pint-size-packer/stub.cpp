@@ -53,7 +53,6 @@ STUB_DATA char sLoadLibraryA[] = "LoadLibraryA";
 STUB_DATA char sNtFreeVirtualMemory[] = "NtFreeVirtualMemory";
 STUB_DATA char sNtAllocateVirtualMemory[] = "NtAllocateVirtualMemory";
 STUB_DATA char sNtProtectVirtualMemory[] = "NtProtectVirtualMemory";
-STUB_DATA char sSectionNameRsrc[] = ".rsrc";
 
 
 
@@ -140,7 +139,6 @@ DECLSPEC_NOINLINE void* stub_memcpy_reverse( void* dst, const void* src, uint32_
     unsigned char* d = (unsigned char*)dst;
     unsigned char* s = (unsigned char*)src;
 
-    // LOL idk why but when I inline this function and use while( --n >= 0 ) the compiled generated an infinite loop
     for ( int i = n - 1; i >= 0; i-- ) {
         d[i] = s[i];
     }
@@ -153,37 +151,23 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
 {
     PEHeader pe( get_module_handle( 0 ) );
 
+    uint8_t* pCmp = (uint8_t*)pe.rva2va( pe.section_hdr( 0U )->VirtualAddress );
+    uint8_t* pUncomp = nullptr;
+    size_t uncomp_len = pe.section_hdr( 0U )->PointerToLinenumbers;
+    mz_ulong cmp_len = pe.section_hdr( 0U )->SizeOfRawData;
+    pNtAllocateVirtualMemory( NtCurrentProcess, (void**)&pUncomp, NULL, &uncomp_len, MEM_COMMIT, PAGE_READWRITE );
+
+    uncompress( pUncomp, (mz_ulong*)&uncomp_len, pCmp, cmp_len );
+
     uint8_t* base = (uint8_t*)pe.get_base();
 
-    for ( int i = NumberOfSections - 1; i > 0; i-- ) {
+    for ( int i = NumberOfSections - 1; i >= 0; i-- ) {
         PIMAGE_SECTION_HEADER hdr = &SectionHeaders[i];
-        volatile uint32_t size = hdr->SizeOfRawData;
-        stub_memcpy_reverse( &base[hdr->VirtualAddress], &base[SectionHeaders[0].VirtualAddress + hdr->PointerToRawData - SectionHeaders[0].PointerToRawData], size );
+        stub_memcpy_reverse( &base[hdr->VirtualAddress], &pUncomp[hdr->PointerToRawData - SectionHeaders[0].PointerToRawData], hdr->SizeOfRawData );
     }
 
-#if 0
-    for ( int i = 0; i < pe.file_hdr()->NumberOfSections; i++ ) {
-    
-        PIMAGE_SECTION_HEADER section = pe.section_hdr( i );
-        if ( section->PointerToLinenumbers == 0 ) {
-            continue;
-        }
-        
-        uint8_t* pCmp = (uint8_t*)pe.rva2va( section->VirtualAddress );
-        uint8_t* pUncomp = nullptr;
-        size_t uncomp_len = section->PointerToLinenumbers;
-        mz_ulong cmp_len = section->SizeOfRawData;
-
-        pNtAllocateVirtualMemory( NtCurrentProcess, (void**)&pUncomp, NULL, &uncomp_len, MEM_COMMIT, PAGE_READWRITE );
-
-        uncompress( pUncomp, (mz_ulong*)&uncomp_len, pCmp, cmp_len );
-        
-        stub_memcpy( pCmp, pUncomp, uncomp_len );
-
-        pNtFreeVirtualMemory( NtCurrentProcess, (void**)&pUncomp, &uncomp_len, MEM_RELEASE );
-
-    }
-#endif
+    uncomp_len = 0;
+    pNtFreeVirtualMemory( NtCurrentProcess, (void**)&pUncomp, &uncomp_len, MEM_RELEASE );
 
 }
 
@@ -199,8 +183,6 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe 
     PIMAGE_DATA_DIRECTORY dir_iat = &DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT];
     size_t iat_size = dir_iat->Size;
     void* iat_addr = pe.rva2va( dir_iat->VirtualAddress );
-    DWORD prot;
-    pNtProtectVirtualMemory( NtCurrentProcess, &iat_addr, &iat_size, PAGE_READWRITE, &prot );
 
     PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR)pe.rva2va( DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress );
 
@@ -232,9 +214,6 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe 
     
     }
 
-
-    
-    pNtProtectVirtualMemory( NtCurrentProcess, &iat_addr, &iat_size, prot, &prot );
 }
 
 
@@ -288,16 +267,6 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_data_dirs( void )
     void* base = get_module_handle( 0 );
     PEHeader pe( base );
 
-    DWORD old_prot;
-    size_t hdrs_size = pe.optional_hdr()->SizeOfHeaders;
-    pNtProtectVirtualMemory( NtCurrentProcess, &base, &hdrs_size, PAGE_READWRITE, &old_prot );
-
-    for ( int i = 0; i < _countof( DataDirectory ); i++ ) {
-        *pe.data_dir( i ) = DataDirectory[i];
-    }
-
-    pNtProtectVirtualMemory( NtCurrentProcess, &base, &hdrs_size, old_prot, &old_prot );
-    
     fix_import_dir( pe );
     fix_reloc_dir( pe );
 }

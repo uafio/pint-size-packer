@@ -75,6 +75,20 @@ public:
 
         pe.sections.merge();
 
+        void* pCmp = nullptr;
+        uint32_t pCmpSize = 0;
+        Section* section = pe.sections.get().front();
+
+        _compress( section->data, section->hdr.SizeOfRawData, &pCmp, &pCmpSize, pe );
+        if ( pCmp && pCmpSize ) {
+            section->hdr.PointerToLinenumbers = section->hdr.SizeOfRawData;
+            section->hdr.SizeOfRawData = pe.align_file( pCmpSize );
+            free( section->data );
+            section->data = pCmp;
+        }
+
+
+
         // Add .stub section to the new exe
         PEHeader own( &__ImageBase );
 
