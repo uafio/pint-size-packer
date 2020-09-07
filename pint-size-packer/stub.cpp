@@ -25,8 +25,8 @@ typedef void*( WINAPI* LoadLibraryA_t )( char* lib );
 STUB_DATA size_t ImageBase;
 STUB_DATA uint32_t OriginalEntryPoint;
 STUB_DATA uint32_t NumberOfSections;
-STUB_DATA IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
-STUB_DATA IMAGE_SECTION_HEADER SectionHeaders[20];
+STUB_DATA DECLSPEC_ALIGN( 16 ) IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+STUB_DATA DECLSPEC_ALIGN( 16 ) IMAGE_SECTION_HEADER SectionHeaders[16];
 
 //
 // Function Pointer Declarations
@@ -53,7 +53,7 @@ STUB_DATA char sLoadLibraryA[] = "LoadLibraryA";
 STUB_DATA char sNtFreeVirtualMemory[] = "NtFreeVirtualMemory";
 STUB_DATA char sNtAllocateVirtualMemory[] = "NtAllocateVirtualMemory";
 STUB_DATA char sNtProtectVirtualMemory[] = "NtProtectVirtualMemory";
-STUB_DATA char sStubSectionName[] = ".stub";
+STUB_DATA char sSectionNameRsrc[] = ".rsrc";
 
 
 
@@ -135,13 +135,32 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void stub_init( void )
     _ReadWriteBarrier();
 }
 
+DECLSPEC_NOINLINE void* stub_memcpy_reverse( void* dst, const void* src, uint32_t n )
+{
+    unsigned char* d = (unsigned char*)dst;
+    unsigned char* s = (unsigned char*)src;
 
+    for ( int i = n - 1; i >= 0; i-- ) {
+        d[i] = s[i];
+    }
+
+    return dst;
+}
 
 
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
 {
     PEHeader pe( get_module_handle( 0 ) );
 
+    uint8_t* base = (uint8_t*)pe.get_base();
+
+    for ( int i = NumberOfSections - 1; i > 0; i-- ) {
+        PIMAGE_SECTION_HEADER hdr = &SectionHeaders[i];
+        volatile uint32_t size = hdr->SizeOfRawData;
+        stub_memcpy_reverse( &base[hdr->VirtualAddress], &base[SectionHeaders[0].VirtualAddress + hdr->PointerToRawData - SectionHeaders[0].PointerToRawData], size );
+    }
+
+#if 0
     for ( int i = 0; i < pe.file_hdr()->NumberOfSections; i++ ) {
     
         PIMAGE_SECTION_HEADER section = pe.section_hdr( i );
@@ -163,6 +182,8 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
         pNtFreeVirtualMemory( NtCurrentProcess, (void**)&pUncomp, &uncomp_len, MEM_RELEASE );
 
     }
+#endif
+
 }
 
 
@@ -170,17 +191,17 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
 #pragma check_stack( off )
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe )
 {
-    if ( pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->Size == 0 ) {
+    if ( DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size == 0 ) {
         return;
     }
 
-    PIMAGE_DATA_DIRECTORY dir_iat = pe.data_dir( IMAGE_DIRECTORY_ENTRY_IAT );
+    PIMAGE_DATA_DIRECTORY dir_iat = &DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT];
     size_t iat_size = dir_iat->Size;
     void* iat_addr = pe.rva2va( dir_iat->VirtualAddress );
     DWORD prot;
     pNtProtectVirtualMemory( NtCurrentProcess, &iat_addr, &iat_size, PAGE_READWRITE, &prot );
 
-    PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR)pe.rva2va( pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->VirtualAddress );
+    PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR)pe.rva2va( DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress );
 
     while ( import_desc->Name ) {
     
@@ -212,13 +233,13 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe 
 
 
     
-    pNtProtectVirtualMemory( (HANDLE)-1, &iat_addr, &iat_size, prot, &prot );
+    pNtProtectVirtualMemory( NtCurrentProcess, &iat_addr, &iat_size, prot, &prot );
 }
 
 
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_reloc_dir( PEHeader& pe )
 {
-    PIMAGE_DATA_DIRECTORY reloc_dir = pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC );
+    PIMAGE_DATA_DIRECTORY reloc_dir = &DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
 
     if ( reloc_dir->Size == 0 ) {
         return;
@@ -284,7 +305,7 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_data_dirs( void )
 
 
 #pragma check_stack( off )
-extern "C" DECLSPEC_NOINLINE DECLSPEC_NORETURN void unpack( void )
+extern "C" DECLSPEC_NOINLINE void unpack( void )
 {
     stub_init();
     decompress_sections();

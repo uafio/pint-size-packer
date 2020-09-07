@@ -42,11 +42,14 @@ private:
         OriginalEntryPoint = pe.optional_hdr()->AddressOfEntryPoint;
 
         // Save the DATA_DIRECTORIES for the unpacker
-        memcpy( DataDirectory, pe.data_dir( 0 ), sizeof( DataDirectory ) );
+        stub_memcpy( DataDirectory, pe.data_dir( 0 ), sizeof( DataDirectory ) );
 
         // Save section headers so we know how to unpack them.
-        NumberOfSections = pe.file_hdr()->NumberOfSections;
-        memcpy( SectionHeaders, pe.section_hdr( 0U ), sizeof( IMAGE_SECTION_HEADER ) * pe.file_hdr()->NumberOfSections );
+        NumberOfSections = (DWORD)pe.sections.get().size();
+
+        for ( int i = 0; i < pe.sections.get().size(); i++ ) {
+            SectionHeaders[i] = pe.sections.get().at( i )->hdr;
+        }
     }
 
 
@@ -58,9 +61,17 @@ public:
 
     virtual bool pack( PE& pe )
     {
-        save_stub_externs( pe );
+        Section* rsrc = pe.sections[".rsrc"];
+        Section* rcopy = nullptr;
+        if ( rsrc ) {
+            rcopy = new Section( &rsrc->hdr, nullptr, 0 );
+            rcopy->hdr.SizeOfRawData = 0;
+            rcopy->hdr.Name[5] = '2';
+            pe.sections.replace( rsrc, rcopy );
+            pe.update_headers();
+        }
 
-        Section* rsrc = pe.sections.pop( ".rsrc" );
+        save_stub_externs( pe );
 
         pe.sections.merge();
 
@@ -68,11 +79,9 @@ public:
         PEHeader own( &__ImageBase );
 
         IMAGE_SECTION_HEADER stub_section_hdr = *own.section_hdr( ".stub" );
-        stub_section_hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
         void* stub_section_data = own.rva2va( stub_section_hdr.VirtualAddress );
 
         pe.sections.add( new Section( &stub_section_hdr, stub_section_data, stub_section_hdr.SizeOfRawData ) );
-
 
         if ( rsrc ) {
             pe.sections.add( rsrc );
@@ -87,6 +96,8 @@ public:
         pe.sections.rename( pe.sections.get().at( 0 ), ".psp0" );
         pe.sections.rename( pe.sections.get().at( 1 ), ".psp1" );
 
+        pe.sections[".psp0"]->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
+        pe.sections[".psp1"]->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
 
         // These can be corrupted at program load, we restore them later anyway
 
@@ -133,6 +144,8 @@ public:
             pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->VirtualAddress = rsrc->hdr.VirtualAddress;
         }
 
+        // test
+        memset( pe.data_dir( 0 ), 0, sizeof( IMAGE_DATA_DIRECTORY ) * 16 );
 
         return true;
     }
