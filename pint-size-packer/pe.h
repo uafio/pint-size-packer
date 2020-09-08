@@ -247,9 +247,9 @@ public:
         return reinterpret_cast< PIMAGE_DOS_HEADER >( base );
     }
 
-    __forceinline PIMAGE_NT_HEADERS64 nt_hdr( void )
+    __forceinline PIMAGE_NT_HEADERS nt_hdr( void )
     {
-        return reinterpret_cast< PIMAGE_NT_HEADERS64 >( reinterpret_cast< uintptr_t >( base ) + pe_hdr()->e_lfanew );
+        return reinterpret_cast< PIMAGE_NT_HEADERS >( reinterpret_cast< uintptr_t >( base ) + pe_hdr()->e_lfanew );
     }
 
     __forceinline PIMAGE_FILE_HEADER file_hdr( void )
@@ -257,9 +257,14 @@ public:
         return &nt_hdr()->FileHeader;
     }
 
-    __forceinline PIMAGE_OPTIONAL_HEADER64 optional_hdr( void )
+    __forceinline PIMAGE_OPTIONAL_HEADER optional_hdr( void )
     {
         return &nt_hdr()->OptionalHeader;
+    }
+
+    __forceinline bool is_PE32( void )
+    {
+        return optional_hdr()->Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC;
     }
 
     __forceinline PIMAGE_DATA_DIRECTORY data_dir( size_t index )
