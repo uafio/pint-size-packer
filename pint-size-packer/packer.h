@@ -113,29 +113,6 @@ public:
         pe.sections[".psp0"]->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
         pe.sections[".psp1"]->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
 
-        // These can be corrupted at program load, we restore them later anyway
-
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXPORT )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXPORT )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_IMPORT )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_IAT )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_IAT )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXCEPTION )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_EXCEPTION )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DEBUG )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DEBUG )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_SECURITY )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_SECURITY )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_ARCHITECTURE )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_ARCHITECTURE )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_GLOBALPTR )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_GLOBALPTR )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT )->VirtualAddress = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT )->Size = 0;
-        // pe.data_dir( IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT )->VirtualAddress = 0;
-
 
         // Unsupported for now. This section can't be compressed or the application will lose its resources
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_RESOURCE )->Size = 0;
@@ -154,12 +131,13 @@ public:
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR )->VirtualAddress = 0;
 
         // We don't want Windows to corrupt our compressed data by trying to resolve relocations
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->Size = 0;
+        pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->VirtualAddress = 0;
+
         if ( rsrc ) {
-            pe.data_dir( IMAGE_DIRECTORY_ENTRY_BASERELOC )->VirtualAddress = rsrc->hdr.VirtualAddress;
+            pe.data_dir( IMAGE_DIRECTORY_ENTRY_RESOURCE )->VirtualAddress = rsrc->hdr.VirtualAddress;
         }
 
-        // test
-        memset( pe.data_dir( 0 ), 0, sizeof( IMAGE_DATA_DIRECTORY ) * 16 );
 
         return true;
     }

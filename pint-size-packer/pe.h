@@ -33,7 +33,66 @@ public:
         }
         memset( &hdr, 0, sizeof( hdr ) );
     }
+
+    virtual void rebase( void )
+    {
+    }
 };
+
+
+class SectionRsrc : public Section
+{
+private:
+    IMAGE_DATA_DIRECTORY OriginalRsrcDir;
+
+public:
+    SectionRsrc( PIMAGE_SECTION_HEADER hdr, void* data, size_t size, PIMAGE_DATA_DIRECTORY RsrcDir )
+        : Section( hdr, data, size )
+    {
+        OriginalRsrcDir = *RsrcDir;
+    }
+
+    void fix_leafs( PIMAGE_RESOURCE_DIRECTORY dir )
+    {
+        PIMAGE_RESOURCE_DIRECTORY_ENTRY dir_entry = ( PIMAGE_RESOURCE_DIRECTORY_ENTRY )( dir + 1 );
+        uint32_t delta = hdr.VirtualAddress - OriginalRsrcDir.VirtualAddress;
+
+        for ( int i = 0; i < dir->NumberOfNamedEntries; i++ ) {
+            if ( !dir_entry->DataIsDirectory ) {
+                ( ( PIMAGE_RESOURCE_DATA_ENTRY )( (uintptr_t)data + dir_entry[i].OffsetToData ) )->OffsetToData += delta;
+            } else {
+                PIMAGE_RESOURCE_DIRECTORY dir_next = ( PIMAGE_RESOURCE_DIRECTORY )( (uintptr_t)data + dir_entry[i].OffsetToDirectory );
+                fix_leafs( dir_next );
+            }
+        }
+
+        dir_entry = &dir_entry[dir->NumberOfNamedEntries];
+
+        for ( int i = 0; i < dir->NumberOfIdEntries; i++ ) {
+            if ( !dir_entry->DataIsDirectory ) {
+                ( ( PIMAGE_RESOURCE_DATA_ENTRY )( (uintptr_t)data + dir_entry[i].OffsetToData ) )->OffsetToData += delta;
+            } else {
+                PIMAGE_RESOURCE_DIRECTORY dir_next = ( PIMAGE_RESOURCE_DIRECTORY )( (uintptr_t)data + dir_entry[i].OffsetToDirectory );
+                fix_leafs( dir_next );
+            }
+        }
+
+    }
+
+    virtual void rebase( void )
+    {
+        if ( OriginalRsrcDir.VirtualAddress == hdr.VirtualAddress ) {
+            return;
+        }
+
+        fix_leafs( PIMAGE_RESOURCE_DIRECTORY( data ) );
+
+        OriginalRsrcDir.VirtualAddress = hdr.VirtualAddress;
+    }
+
+
+};
+
 
 class Sections
 {
@@ -295,7 +354,12 @@ public:
                 auto shdr = section_hdr( i );
                 shdr->Misc.VirtualSize = align_section( shdr->Misc.VirtualSize );
                 auto sdata = section_data( i );
-                sections.add( new Section( shdr, sdata, shdr->SizeOfRawData ) );
+
+                if ( strncmp( reinterpret_cast< char* >( shdr->Name ), ".rsrc", 8 ) == 0 ) {
+                    sections.add( new SectionRsrc( shdr, sdata, shdr->SizeOfRawData, data_dir( IMAGE_DIRECTORY_ENTRY_RESOURCE ) ) );
+                } else {
+                    sections.add( new Section( shdr, sdata, shdr->SizeOfRawData ) );
+                }
             }
         }
     }
@@ -320,6 +384,8 @@ public:
 
             raw += section->hdr.SizeOfRawData;
             rav += align_section( section->hdr.Misc.VirtualSize );
+
+            section->rebase();
         }
 
         file_hdr()->NumberOfSections = (WORD)sections.get().size();
