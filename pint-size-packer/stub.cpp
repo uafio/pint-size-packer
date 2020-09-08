@@ -24,9 +24,9 @@ typedef void*( WINAPI* LoadLibraryA_t )( char* lib );
 //
 STUB_DATA size_t ImageBase;
 STUB_DATA uint32_t OriginalEntryPoint;
-STUB_DATA uint32_t NumberOfSections;
-STUB_DATA DECLSPEC_ALIGN( 16 ) IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
-STUB_DATA DECLSPEC_ALIGN( 16 ) IMAGE_SECTION_HEADER SectionHeaders[16];
+STUB_DATA uint32_t OriginalNumberOfSections;
+STUB_DATA DECLSPEC_ALIGN( 16 ) IMAGE_DATA_DIRECTORY OriginalDataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+STUB_DATA DECLSPEC_ALIGN( 16 ) IMAGE_SECTION_HEADER OriginalSectionHeaders[16];
 
 //
 // Function Pointer Declarations
@@ -161,9 +161,9 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
 
     uint8_t* base = (uint8_t*)pe.get_base();
 
-    for ( int i = NumberOfSections - 1; i >= 0; i-- ) {
-        PIMAGE_SECTION_HEADER hdr = &SectionHeaders[i];
-        stub_memcpy_reverse( &base[hdr->VirtualAddress], &pUncomp[hdr->PointerToRawData - SectionHeaders[0].PointerToRawData], hdr->SizeOfRawData );
+    for ( int i = OriginalNumberOfSections - 1; i >= 0; i-- ) {
+        PIMAGE_SECTION_HEADER hdr = &OriginalSectionHeaders[i];
+        stub_memcpy_reverse( &base[hdr->VirtualAddress], &pUncomp[hdr->PointerToRawData - OriginalSectionHeaders[0].PointerToRawData], hdr->SizeOfRawData );
     }
 
     uncomp_len = 0;
@@ -176,15 +176,15 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void decompress_sections( void )
 #pragma check_stack( off )
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe )
 {
-    if ( DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size == 0 ) {
+    if ( OriginalDataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size == 0 ) {
         return;
     }
 
-    PIMAGE_DATA_DIRECTORY dir_iat = &DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT];
+    PIMAGE_DATA_DIRECTORY dir_iat = &OriginalDataDirectory[IMAGE_DIRECTORY_ENTRY_IAT];
     size_t iat_size = dir_iat->Size;
     void* iat_addr = pe.rva2va( dir_iat->VirtualAddress );
 
-    PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR)pe.rva2va( DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress );
+    PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR)pe.rva2va( OriginalDataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress );
 
     while ( import_desc->Name ) {
     
@@ -219,7 +219,7 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_import_dir( PEHeader& pe 
 
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_reloc_dir( PEHeader& pe )
 {
-    PIMAGE_DATA_DIRECTORY reloc_dir = &DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+    PIMAGE_DATA_DIRECTORY reloc_dir = &OriginalDataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
 
     if ( reloc_dir->Size == 0 ) {
         return;

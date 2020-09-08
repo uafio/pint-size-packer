@@ -8,9 +8,9 @@ extern "C" IMAGE_DOS_HEADER __ImageBase;
 extern "C" void unpack( void );
 extern size_t ImageBase;
 extern uint32_t OriginalEntryPoint;
-extern uint32_t NumberOfSections;
-extern IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
-extern IMAGE_SECTION_HEADER SectionHeaders[20];
+extern uint32_t OriginalNumberOfSections;
+extern IMAGE_DATA_DIRECTORY OriginalDataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+extern IMAGE_SECTION_HEADER OriginalSectionHeaders[20];
 
 
 class Packer
@@ -42,13 +42,13 @@ private:
         OriginalEntryPoint = pe.optional_hdr()->AddressOfEntryPoint;
 
         // Save the DATA_DIRECTORIES for the unpacker
-        stub_memcpy( DataDirectory, pe.data_dir( 0 ), sizeof( DataDirectory ) );
+        stub_memcpy( OriginalDataDirectory, pe.data_dir( 0 ), sizeof( OriginalDataDirectory ) );
 
         // Save section headers so we know how to unpack them.
-        NumberOfSections = (DWORD)pe.sections.get().size();
+        OriginalNumberOfSections = (DWORD)pe.sections.get().size();
 
         for ( int i = 0; i < pe.sections.get().size(); i++ ) {
-            SectionHeaders[i] = pe.sections.get().at( i )->hdr;
+            OriginalSectionHeaders[i] = pe.sections.get().at( i )->hdr;
         }
     }
 
@@ -113,10 +113,6 @@ public:
         pe.sections[".psp0"]->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
         pe.sections[".psp1"]->hdr.Characteristics |= IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
 
-
-        // Unsupported for now. This section can't be compressed or the application will lose its resources
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_RESOURCE )->Size = 0;
-        pe.data_dir( IMAGE_DIRECTORY_ENTRY_RESOURCE )->VirtualAddress = 0;
 
         // Unsupported SafeSEH
         pe.data_dir( IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG )->Size = 0;
