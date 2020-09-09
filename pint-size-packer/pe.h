@@ -39,7 +39,6 @@ public:
     }
 };
 
-
 class SectionRsrc : public Section
 {
 private:
@@ -76,7 +75,6 @@ public:
                 fix_leafs( dir_next );
             }
         }
-
     }
 
     virtual void rebase( void )
@@ -89,10 +87,7 @@ public:
 
         OriginalRsrcDir.VirtualAddress = hdr.VirtualAddress;
     }
-
-
 };
-
 
 class Sections
 {
@@ -208,7 +203,7 @@ public:
         assert( offset == rawsize );
 
         Section* newsection = new Section( &hdr, data, rawsize );
-        
+
         free( data );
 
         clear();
@@ -323,6 +318,18 @@ public:
             }
         }
 
+        return 0;
+    }
+
+    template< class T >
+    __forceinline size_t va2section( T va )
+    {
+        for ( int i = 0; i < file_hdr()->NumberOfSections; i++ ) {
+            auto section = section_hdr( i );
+            if ( (size_t)va >= (size_t)rva2va( section->VirtualAddress ) && (size_t)va < (size_t)rva2va( section->VirtualAddress + section->Misc.VirtualSize ) ) {
+                return (size_t)va - (size_t)rva2va( section->VirtualAddress );
+            }
+        }
         return 0;
     }
 };
@@ -444,7 +451,6 @@ public:
         }
 
         for ( auto section : sections.get() ) {
-
             ofile.write( reinterpret_cast< char* >( section->data ), section->hdr.SizeOfRawData );
 
             pad = align_file( section->hdr.SizeOfRawData ) - section->hdr.SizeOfRawData;
