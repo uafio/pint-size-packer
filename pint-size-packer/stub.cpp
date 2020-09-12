@@ -114,6 +114,7 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE void* get_proc_address( void* hModule, ch
 
 
 
+
 #pragma check_stack( off )
 #pragma strict_gs_check( off )
 DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void stub_init( void )
@@ -275,7 +276,7 @@ DECLSPEC_SAFEBUFFERS DECLSPEC_NOINLINE static void fix_data_dirs( void )
 
 
 #pragma check_stack( off )
-extern "C" DECLSPEC_NOINLINE void unpack( void )
+extern "C" DECLSPEC_NOINLINE DECLSPEC_NORETURN void unpack( void )
 {
     stub_init();
     decompress_sections();
