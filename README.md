@@ -13,6 +13,25 @@ As part of the packed application, the purpose of the decompression stub is to d
 ## Features
 - [x] x64 Support
 - [ ] x86 Support
+- [ ] TLS Support
+- [ ] .NET Support
+- [ ] DLL Support
 - [x] Hide Import Table 
 - [x] Resolve Imports
 - [x] Fix Relocations
+- [x] Per section compression -- [release](https://github.com/uafio/pint-size-packer/releases/tag/0.1)
+
+## Usage
+```
+> psp.exe
+Usage: psp.exe <infile> <outfile>
+
+> psp.exe psp.exe psp_packed.exe
+
+> psp_packed.exe
+Usage: psp_packed.exe <infile> <outfile>
+
+> dir
+            62,976 psp.exe
+            43,008 psp_packed.exe
+```
